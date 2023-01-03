@@ -40,6 +40,8 @@ var bot = {
 
     //channel ID for rating songs
     spotChannel: '1043685911147323464',
+    //channel ID for songs changelog
+    spotLogChat: 'Fill Later',  // INCOMPLETE
     //message with song data for rating
     songMessage: null,
 
@@ -48,6 +50,10 @@ var bot = {
         clientSecret: clientSecret,
         redirectUri: 'http://localhost:8888/callback'
     }),
+    //user ID for logged in spotify account
+    spotifyUserID:'jdv0921',
+    //message corresponding to the song rating system
+    ratingMessage: null,
 
     //master playlist
     seaID: '67LeHr41yfTbQYxQWjSV5F',
@@ -68,7 +74,7 @@ var bot = {
     min: -25,
     max: 25,
 
-    //array of song objects iin master playlist
+    //array of song objects in master playlist
     songsObjectMasterList: [],
     //array of song objects
     songsObjectRatingList: [],
@@ -91,6 +97,9 @@ var bot = {
         this.syncToMaster();
         //reload playlist
         this.helpers('reloadplaylist', this.playlisttheme + " " + this.playsetting + " " + this.playvalue);
+        if (this.ratingMessage == null) {
+            this.helpers('sendballot', this.spotChannel, bot);
+        }
     },
 
     //save/load most recent settings for the playlist and rating theme, also loads themelist
@@ -100,7 +109,8 @@ var bot = {
             playtheme: this.playlisttheme,
             playset: this.playsetting,
             playval: this.playvalue,
-            ratetheme: this.ratingtheme
+            ratetheme: this.ratingtheme,
+            ratMsg: this.ratingMessage
         }
         var themes = {
             themes: this.themeslist
@@ -127,9 +137,10 @@ var bot = {
         //read in playlist theme, settings, rating theme, and a list of all themes
         this.playlisttheme = settings.playtheme;
         this.playsetting = settings.playset;
-        this.playvalue = setting.playval;
+        this.playvalue = settings.playval;
         this.ratingtheme = settings.ratetheme;
         this.themes = themes.themes;
+        this.ratingMessage = settings.ratMsg;
     },
 
     //handles reading in the main song list
@@ -150,6 +161,24 @@ var bot = {
                 });
             });
         console.log("master list has been read");
+    },
+    getPlaylistUris: function (playid) {
+        //get a list of uris from given playlist
+        return new Promise((resolve, reject) => {
+            //create an empty list to return
+            var uris = [];
+            this.getTracks(playid)
+                .then((tracks) => {
+                    tracks.forEach(item => {
+                        //only support non-local songs
+                        if (item.track.uri.indexOf("spotify:local") == -1) {
+                            uris.push(item.track.uri);
+                        }
+                    });
+                });
+            //resolve the uri list out to be used
+            resolve(uris);
+        });
     },
     getTracks: function (playlistID) {
         //return a promise
@@ -259,6 +288,15 @@ var bot = {
                 songlistMap.set(song.value, songlistMap.get(song.value).push(song));
             });
             this.theme = newtheme;
+
+            //change ratingMessage content
+            if (this.ratingMessage != null) {
+                this.helpers('updateballot', this.ratingMessage, bot);
+            }
+            else
+            {
+                this.helpers('sendballot', this.spotChannel, bot);
+            }
         }
         else {
             console.log("Theme does not exist. (loading error)");
@@ -273,6 +311,36 @@ var bot = {
         });
     },
 
+    checkMasterListForUri: function (uri, add) {
+        return new Promise((resolve, reject) =>
+        {
+            //can be used to auto add liked songs to master list INCOMPLETE
+            if (add) {
+
+            }
+            resolve(uri);
+        })
+    },
+    getSongByUri: function (uri, songs) {
+        songs.forEach(song => {
+            if (song.uri === uri)
+            {
+                return song
+            }
+        });
+        return null;
+    },
+
+    reloadPlaylist: function() {
+        //reload the playlist with the previously used data
+        this.setPlaylist(this.playlisttheme, this.playsetting, this.playvalue);
+    },
+    savePlaylist: function (name, public) {
+        //clones current playlist into a new playlist called name
+        var uris = this.getPlaylistUris(this.themelistID);
+        var newlist = spotifyApi.createPlaylist(name, {'description': 'My auto generated playlist of my ' + this.playsetting + ' ' + this.playvalue + ' ' + this.playlisttheme + ' songs. (prompt: setplaylist ' + this.playlisttheme + ' ' + this.playsetting + ' ' + this.playvalue, 'public': public})
+        this.createSpotifyPlaylist(newlist.body.id, uris);
+    },
     //create a new playlist on the dynamic playlist
     setPlaylist: function (theme, type, value) {
         var run = true;
@@ -393,9 +461,35 @@ var bot = {
         }
         return selected;
     },
-    createSpotifyPlaylist: function (songs) {
-        //actually make the playlist, songs is a list of song objects use song[i].uri to get the songs in spotify ************(INCOMPLETE)************
-        
+    //adds new songs to the dynamic playlist
+    createSpotifyPlaylist: function (playlistID, songs) {
+        //actually make the playlist, songs is a list of song objects use song[i].uri to get the songs in spotify
+        var uris = this.songsToUris(songs);
+        if (playlistID == this.themelistID) {
+            this.clearDynamicList();
+        }
+        uris.forEach(uri => {
+            this.spotifyApi.addTracksToPlaylist(playlistID, uri);
+        });
+    },
+    //removes all songs from the dynamic playlist
+    clearDynamicList: function () {
+        var uris = this.getPlaylistUris(this.themelistID);
+        for (var i = 0; i < uris.length; i += 100) {
+            if (uris.length - i > 100) {
+                this.spotifyApi.removeTracksFromPlaylist(this.themelistID, uris.slice(i, i + 100));
+            }
+            else {
+                this.spotifyApi.removeTracksFromPlaylist(this.themelistID, uris.slice(i));
+            }
+        }
+    },
+    songsToUris: function (songs) {
+        var uris = [];
+        for (var i = 0; i < songs.length; i++) {
+            uris.push(songs[i].uri);
+        }
+        return uris;
     },
 
     addSong: function (name, uri, value = 0) {
@@ -503,11 +597,7 @@ client.once('ready', () => {
 client.on('message', message => {
     //ignore messages from itself
     if (message.author.bot) return;
-
-    if (message.channel.type === 'dm') {
-        var userID = message.author.id;
-        bot.helpers('relayMsgToJaspa', { message: message });
-    }
+    //the message is in a text channel
     else if (message.channel.type === 'text') {
         //if the message starts with prefix
         if (message.content.startsWith(bot.prefix)) {
@@ -528,7 +618,17 @@ client.on('message', message => {
 
 //for song voting based on reactions
 client.on('messageReactionAdd', (reaction, user) => {
-    //INCOMPLETE
+    // if there is a ballot and this message is the ballot and the person who reacted is jasper
+    if (bot.ballotMessage != null && reaction.message.id === bot.ballotMessage.id)
+    {
+        //check that emoji is valid
+        if (["🤮", "👎", "👍", "🥰"].includes(reaction.emoji.name))
+        {
+            // call helper for emoji
+            bot.helpers(reaction.emoji.name, {reaction: reaction, user: user});
+            reaction.users.remove(user);
+        }
+    }
 });
 
 //spotify login things
