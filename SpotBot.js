@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, ThreadAutoArchiveDuration } = require('discord.js');
 const SpotifyWebApi = require('spotify-web-api-node');
 const client = new Discord.Client({
     intents: [
@@ -110,7 +110,7 @@ var bot = {
             playset: this.playsetting,
             playval: this.playvalue,
             ratetheme: this.ratingtheme,
-            ratMsg: this.ratingMessage
+            ratmsg: this.ratingMessage
         }
         var themes = {
             themes: this.themeslist
@@ -139,8 +139,8 @@ var bot = {
         this.playsetting = settings.playset;
         this.playvalue = settings.playval;
         this.ratingtheme = settings.ratetheme;
-        this.themes = themes.themes;
-        this.ratingMessage = settings.ratMsg;
+        this.themeslist = themes.themes;
+        this.ratingMessage = settings.ratmsg;
     },
 
     //handles reading in the main song list
@@ -275,7 +275,7 @@ var bot = {
         });
     },
     loadTheme: function (newtheme) {
-        if (this.themes.indexOf(newtheme) != -1) {
+        if (this.themeslist.indexOf(newtheme) != -1) {
             //load ./data/spotify/themes/---theme---.json to be the current playlist theme
             var themefile = './data/spotify/themes/' + newtheme + '.json';
             var themedata = JSON.parse(fs.readFileSync(themefile));
@@ -302,13 +302,37 @@ var bot = {
             console.log("Theme does not exist. (loading error)");
         }
     },
+    themeExists: function (theme) {
+        //checks to see if theme exists
+        if (this.themeslist.indexOf(theme) != -1) {
+            return true;
+        }
+        return false;
+    },
     newTheme: function (newtheme) {
         //create a new theme file and initialize it to have all songs in the master list with values of 0
         var themefile = './data/spotify/themes/' + newtheme + '.json';
-        //saves theme to a .json file
-        fs.writeFile(themefile, JSON.stringify(this.songsObjectMasterList), e => {
-            if (e) throw e;
-        });
+        if (!fs.existsSync(themefile)) {
+            //add the theme to the themelist
+            this.themeslist.push(newtheme);
+            //saves theme to a .json file
+            fs.writeFile(themefile, JSON.stringify(this.songsObjectMasterList), e => {
+                if (e) throw e;
+            });
+            return true;
+        }
+        return false;
+    },
+    delTheme: function (theme) {
+        //remove a theme file
+        var themefile = './data/spotify/themes/' + newtheme + '.json';
+        if (fs.existsSync(themefile)) {
+            //remove the theme from the themelist
+            this.themeslist = this.themeslist.filter(e => e !== theme);
+            //delete's the file at themefile
+            fs.unlinkSync(themefile);
+        }
+        return false;
     },
 
     checkMasterListForUri: function (uri, add) {
@@ -345,42 +369,48 @@ var bot = {
     setPlaylist: function (theme, type, value) {
         var run = true;
         //if theme exists
-        if (this.themes.indexOf(theme) != -1) {
-            //crerate a ranked map for the theme of all its songs sorted by value
-            var tempMap = this.createRankedMap(theme);
-            //format val to send into the constructor
-            var val;
-            if (type == "rank" && !isNaN(value)) {
-                val = parseInt(value);
-                if (val > max || val < min) {
-                    val = 0;
-                }
-                this.constructPlaylistRank(tempMap, val);
-            }
-            else {
-                if (value.includes("%") && !isNaN(value.substring(0, str.length - 1))) {
-                    val = Math.ceil(this.songsObjectMasterList.length * (parseFloat(value.substring(0, str.length - 1)) / 100));
-                }
-                else if (!isNaN(value)) {
-                    val = Math.ceil(parseFloat(value));
+        try {
+            if (this.themeslist.indexOf(theme) != -1) {
+                //create a ranked map for the theme of all its songs sorted by value
+                var tempMap = this.createRankedMap(theme);
+                //format val to send into the constructor
+                var val;
+                if (type == "rank" && !isNaN(value)) {
+                    val = parseInt(value);
+                    if (val > max || val < min) {
+                        val = 0;
+                    }
+                    this.constructPlaylistRank(tempMap, val);
                 }
                 else {
-                    //do not continue if invalid args
-                    run = false;
-                    console.log("Invalid value type.");
-                }
-                if (run) {
-                    //check that val is in range
-                    if (val < 0 || val > 1) {
-                        val = 1;
+                    if (value.includes("%") && !isNaN(value.substring(0, str.length - 1))) {
+                        val = Math.ceil(this.songsObjectMasterList.length * (parseFloat(value.substring(0, str.length - 1)) / 100));
                     }
-                    //send data to constructor
-                    this.constructPlaylistStandard(tempMap, type, val);
+                    else if (!isNaN(value)) {
+                        val = Math.ceil(parseFloat(value));
+                    }
+                    else {
+                        //do not continue if invalid args
+                        run = false;
+                        console.log("Invalid value type.");
+                    }
+                    if (run) {
+                        //check that val is in range
+                        if (val < 0 || val > 1) {
+                            val = 1;
+                        }
+                        //send data to constructor
+                        this.constructPlaylistStandard(tempMap, type, val);
+                    }
                 }
             }
+            else {
+                console.log("Theme does not exist.");
+            }
+            return true;
         }
-        else {
-            console.log("Theme does not exist.");
+        catch {
+            return false;
         }
     },
     //creates a temporary map to be passed into a construct playlist function for changing the playlist
