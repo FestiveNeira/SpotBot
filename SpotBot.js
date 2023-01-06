@@ -1,11 +1,22 @@
 const Discord = require("discord.js");
-const { Client, GatewayIntentBits, ThreadAutoArchiveDuration } = require('discord.js');
+const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const SpotifyWebApi = require('spotify-web-api-node');
 const client = new Discord.Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.GuildMessageTyping,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.DirectMessageTyping,
+        GatewayIntentBits.DirectMessageReactions,
+        GatewayIntentBits.MessageContent,
+		GatewayIntentBits.GuildMembers
+    ],
+    
+    partials: [
+        Partials.Channel,
+        Partials.Message
     ]
 })
 
@@ -27,8 +38,7 @@ class Song {
 
 var bot = {
     tokenDiscord: tokenDiscord,
-    prefix: '~',
-    altPrefix: '\\',
+    prefix: '-',
     client: client,
     channelTypes: ['dm', 'text'],
     messageTypes: ['commands', 'generics', 'specials'],
@@ -41,7 +51,7 @@ var bot = {
     //channel ID for rating songs
     spotChannel: '1043685911147323464',
     //channel ID for songs changelog
-    spotLogChat: 'Fill Later',  // INCOMPLETE
+    spotLogChat: '946677297728069632',  // INCOMPLETE
     //message with song data for rating
     songMessage: null,
 
@@ -84,46 +94,54 @@ var bot = {
     //map of scores in theme to a list of songs with that score, key is song score int
     songlistMap: new Discord.Collection,
 
-    startup: function () {
+    startup: async function () {
+        //runs after startup, but before spotify logs in
+    },
+
+    //loading order fucked
+    startupSpotify: async function () {
         //load settings (playlist theme, playlist setting (int or %), rating theme)
-        this.loadSettings();
+        bot.loadSettings();
         //load master playlist and updates
-        this.loadMaster();
-        //load songsMap and intiallize songlistMap
-        this.initSongsMap();
-        //load scores
-        this.loadTheme(this.ratingtheme);
-        //syncs the rating theme by adding/removing songs so it matches the master list
-        this.syncToMaster();
-        //reload playlist
-        this.helpers('reloadplaylist', this.playlisttheme + " " + this.playsetting + " " + this.playvalue);
-        if (this.ratingMessage == null) {
-            this.helpers('sendballot', this.spotChannel, bot);
-        }
+        bot.loadMaster()
+        .then(() => {
+            //load songsMap and intiallize songlistMap
+            bot.initSongsMap();
+            //load scores
+            bot.loadTheme(bot.ratingtheme);
+            //syncs the rating theme by adding/removing songs so it matches the master list
+            bot.syncToMaster();
+            //reload playlist
+            bot.helpers('reloadplaylist', bot.playlisttheme + " " + bot.playsetting + " " + bot.playvalue);
+            if (bot.ratingMessage == null) {
+                bot.helpers('sendballot', bot.spotChannel, bot);
+            }
+            console.log('Bot Loaded');
+        });
     },
 
     //save/load most recent settings for the playlist and rating theme, also loads themelist
     saveSettings: function () {
         //create wrappers for saving settings
         var settings = {
-            playtheme: this.playlisttheme,
-            playset: this.playsetting,
-            playval: this.playvalue,
-            ratetheme: this.ratingtheme,
-            ratmsg: this.ratingMessage
+            playtheme: bot.playlisttheme,
+            playset: bot.playsetting,
+            playval: bot.playvalue,
+            ratetheme: bot.ratingtheme,
+            ratmsg: bot.ratingMessage
         }
         var themes = {
-            themes: this.themeslist
+            themes: bot.themeslist
         }
 
         var settingsfile = './data/spotify/settings.json';
         var themesfile = './data/spotify/themes.json';
 
         //saves settings to a .json files
-        fs.writeFile(settingsfile, JSON.stringify(settings), e => {
+        fs.writeFileSync(settingsfile, JSON.stringify(settings), e => {
             if (e) throw e;
         });
-        fs.writeFile(themesfile, JSON.stringify(themes), e => {
+        fs.writeFileSync(themesfile, JSON.stringify(themes), e => {
             if (e) throw e;
         });
     },
@@ -135,39 +153,58 @@ var bot = {
         var themes = JSON.parse(fs.readFileSync(themesfile));
 
         //read in playlist theme, settings, rating theme, and a list of all themes
-        this.playlisttheme = settings.playtheme;
-        this.playsetting = settings.playset;
-        this.playvalue = settings.playval;
-        this.ratingtheme = settings.ratetheme;
-        this.themeslist = themes.themes;
-        this.ratingMessage = settings.ratmsg;
+        bot.playlisttheme = settings.playtheme;
+        bot.playsetting = settings.playset;
+        bot.playvalue = settings.playval;
+        bot.ratingtheme = settings.ratetheme;
+        bot.themeslist = themes.themes;
+        bot.ratingMessage = settings.ratmsg;
     },
 
     //handles reading in the main song list
     loadMaster: function () {
-        //load masterlist from spotify
-        console.log("reading master list");
-        this.getTracks(this.seaID)
-            .then((tracks) => {
-                tracks.forEach(item => {
-                    //only support non-local songs
-                    if (item.track.uri.indexOf("spotify:local") == -1) {
-                        let newsong = new Song(item.track.name, item.track.uri, 0);
-                        this.songsObjectMasterList.push(newsong);
-                    }
-                    else {
-                        console.log(item.track.uri + " is local and unsupported.");
-                    }
+        return new Promise((resolve, reject) =>
+        {
+            //load masterlist from spotify
+            console.log("reading master list");
+            bot.getTracks(bot.seaID)
+                .then(function (tracks)
+                {
+                    tracks.forEach(item => {
+                        //only support non-local songs
+                        if (item.track.uri.indexOf("spotify:local") == -1) {
+                            let newsong = new Song(item.track.name, item.track.uri, 0);
+                            bot.songsObjectMasterList.push(newsong);
+                        }
+                        else {
+                            console.log(item.track.uri + " is local and unsupported.");
+                        }
+                    });
+                    console.log("master list has been read");
+                    resolve();
                 });
-            });
-        console.log("master list has been read");
+        })
+        .catch(function (error) 
+        {
+            if (error.statusCode === 500 || error.statusCode === 502)
+            {
+                console.log("Server error while reading the barrel, trying again");
+                bot.loadMaster()
+                    .then(() => resolve())
+            }
+            else
+            {
+                console.log('Something went wrong while reading the barrel! 111');
+                console.log(error);
+            }
+        });
     },
     getPlaylistUris: function (playid) {
         //get a list of uris from given playlist
         return new Promise((resolve, reject) => {
             //create an empty list to return
             var uris = [];
-            this.getTracks(playid)
+            bot.getTracks(playid)
                 .then((tracks) => {
                     tracks.forEach(item => {
                         //only support non-local songs
@@ -176,6 +213,7 @@ var bot = {
                         }
                     });
                 });
+            console.log('uris retrieved');
             //resolve the uri list out to be used
             resolve(uris);
         });
@@ -183,10 +221,10 @@ var bot = {
     getTracks: function (playlistID) {
         //return a promise
         return new Promise((resolve, reject) => {
-            //get playlist data from API 
+            //get playlist data from API
             bot.spotifyApi.getPlaylist(playlistID)
                 //send the length of the playlist into readTracks so that it knows how much to scan
-                .then((playlistInfo) => this.readTracks(playlistInfo.body.tracks.total, playlistID))
+                .then((playlistInfo) => bot.readTracks(playlistInfo.body.tracks.total, playlistID))
                 //resolve the tracks back out to the promise
                 .then((tracks) => resolve(tracks))
                 //error handling 
@@ -195,7 +233,7 @@ var bot = {
                         //report server error
                         console.log("Server error, trying again");
                         //try again
-                        this.getTracks(playlistID)
+                        bot.getTracks(playlistID)
                             //resolve with results of successful attempt
                             .then((tracks) => resolve(tracks))
                     }
@@ -222,7 +260,7 @@ var bot = {
                 //get the next batch of tracks
                 bot.spotifyApi.getPlaylistTracks(playlistID, { offset: totTracks.length })
                     //pass that next batch into the next step of readTracks (recurs until ccomplete list is read)
-                    .then((tracksInfo) => this.gettingTracks(goal, playlistID, totTracks, tracksInfo.body.items))
+                    .then((tracksInfo) => bot.readTracks(goal, playlistID, totTracks, tracksInfo.body.items))
                     //resolve the tracks annd pass them up the recursion chain
                     .then((result) => resolve(result))
                     //error handling
@@ -231,7 +269,7 @@ var bot = {
                             //report server error
                             console.log("Server error, trying again");
                             //try again
-                            this.getTracks(playlistID)
+                            bot.getTracks(playlistID)
                                 //resolve with results of successful attempt
                                 .then((tracks) => resolve(tracks))
                         }
@@ -248,54 +286,53 @@ var bot = {
     initSongsMap: function () {
         //creates songsMap and initializes songlistMap
         //initializes songlistMap indexes
-        for (var i = this.min; i <= this.max; i++) {
-            this.songlistMap.set(i, []);
+        for (var i = bot.min; i <= bot.max; i++) {
+            bot.songlistMap.set(i, []);
         }
-        this.songsObjectMasterList.forEach(song => {
-            this.songsMap.set(song.uri, song);
+        bot.songsObjectMasterList.forEach(song => {
+            bot.songsMap.set(song.uri, song);
         });
     },
 
     //save and load theme data for ratings
     saveTheme: function () {
         //write the current playlist theme to ./data/spotify/themes/---theme---.json
-        this.songsObjectRatingList.forEach(song => {
-            song = this.songsMap.get(song.uri);
+        bot.songsObjectRatingList.forEach(song => {
+            song = bot.songsMap.get(song.uri);
         });
 
         var playlistthemesongs = {
-            songs: this.songsObjectRatingList
+            songs: bot.songsObjectRatingList
         }
 
-        var themefile = './data/spotify/themes/' + this.theme + '.json';
-
+        var themefile = './data/spotify/themes/' + bot.theme + '.json';
         //saves theme to a .json file
-        fs.writeFile(themefile, JSON.stringify(playlistthemesongs), e => {
+        fs.writeFileSync(themefile, JSON.stringify(playlistthemesongs), e => {
             if (e) throw e;
         });
     },
     loadTheme: function (newtheme) {
-        if (this.themeslist.indexOf(newtheme) != -1) {
+        if (bot.themeslist.indexOf(newtheme) != -1) {
             //load ./data/spotify/themes/---theme---.json to be the current playlist theme
             var themefile = './data/spotify/themes/' + newtheme + '.json';
             var themedata = JSON.parse(fs.readFileSync(themefile));
             var songslist = themedata.songs;
-            this.songsObjectRatingList = this.songsObjectMasterList;
+            bot.songsObjectRatingList = bot.songsObjectMasterList;
 
             //after reading apply values to rating map to help update scores, key is uri
             songslist.forEach(song => {
-                songsMap.set(song.uri, song);
-                songlistMap.set(song.value, songlistMap.get(song.value).push(song));
+                bot.songsMap.set(song.uri, song);
+                bot.songlistMap.get(song.value).push(song);
             });
-            this.theme = newtheme;
+            bot.theme = newtheme;
 
             //change ratingMessage content
-            if (this.ratingMessage != null) {
-                this.helpers('updateballot', this.ratingMessage, bot);
+            if (bot.ratingMessage != null) {
+                bot.helpers('updateballot', bot.ratingMessage, bot);
             }
             else
             {
-                this.helpers('sendballot', this.spotChannel, bot);
+                bot.helpers('sendballot', bot.spotChannel, bot);
             }
         }
         else {
@@ -304,7 +341,7 @@ var bot = {
     },
     themeExists: function (theme) {
         //checks to see if theme exists
-        if (this.themeslist.indexOf(theme) != -1) {
+        if (bot.themeslist.indexOf(theme) != -1) {
             return true;
         }
         return false;
@@ -314,9 +351,9 @@ var bot = {
         var themefile = './data/spotify/themes/' + newtheme + '.json';
         if (!fs.existsSync(themefile)) {
             //add the theme to the themelist
-            this.themeslist.push(newtheme);
+            bot.themeslist.push(newtheme);
             //saves theme to a .json file
-            fs.writeFile(themefile, JSON.stringify(this.songsObjectMasterList), e => {
+            fs.writeFileSync(themefile, JSON.stringify(bot.songsObjectMasterList), e => {
                 if (e) throw e;
             });
             return true;
@@ -328,7 +365,7 @@ var bot = {
         var themefile = './data/spotify/themes/' + newtheme + '.json';
         if (fs.existsSync(themefile)) {
             //remove the theme from the themelist
-            this.themeslist = this.themeslist.filter(e => e !== theme);
+            bot.themeslist = bot.themeslist.filter(e => e !== theme);
             //delete's the file at themefile
             fs.unlinkSync(themefile);
         }
@@ -357,22 +394,22 @@ var bot = {
 
     reloadPlaylist: function() {
         //reload the playlist with the previously used data
-        this.setPlaylist(this.playlisttheme, this.playsetting, this.playvalue);
+        bot.setPlaylist(bot.playlisttheme, bot.playsetting, bot.playvalue);
     },
     savePlaylist: function (name, public) {
         //clones current playlist into a new playlist called name
-        var uris = this.getPlaylistUris(this.themelistID);
-        var newlist = spotifyApi.createPlaylist(name, {'description': 'My auto generated playlist of my ' + this.playsetting + ' ' + this.playvalue + ' ' + this.playlisttheme + ' songs. (prompt: setplaylist ' + this.playlisttheme + ' ' + this.playsetting + ' ' + this.playvalue, 'public': public})
-        this.createSpotifyPlaylist(newlist.body.id, uris);
+        var uris = bot.getPlaylistUris(bot.themelistID);
+        var newlist = spotifyApi.createPlaylist(name, {'description': 'My auto generated playlist of my ' + bot.playsetting + ' ' + bot.playvalue + ' ' + bot.playlisttheme + ' songs. (prompt: setplaylist ' + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue, 'public': public})
+        bot.createSpotifyPlaylist(newlist.body.id, uris);
     },
     //create a new playlist on the dynamic playlist
     setPlaylist: function (theme, type, value) {
         var run = true;
-        //if theme exists
         try {
-            if (this.themeslist.indexOf(theme) != -1) {
+            //if theme exists
+            if (bot.themeslist.indexOf(theme) != -1) {
                 //create a ranked map for the theme of all its songs sorted by value
-                var tempMap = this.createRankedMap(theme);
+                var tempMap = bot.createRankedMap(theme);
                 //format val to send into the constructor
                 var val;
                 if (type == "rank" && !isNaN(value)) {
@@ -380,11 +417,11 @@ var bot = {
                     if (val > max || val < min) {
                         val = 0;
                     }
-                    this.constructPlaylistRank(tempMap, val);
+                    bot.constructPlaylistRank(tempMap, val);
                 }
                 else {
                     if (value.includes("%") && !isNaN(value.substring(0, str.length - 1))) {
-                        val = Math.ceil(this.songsObjectMasterList.length * (parseFloat(value.substring(0, str.length - 1)) / 100));
+                        val = Math.ceil(bot.songsObjectMasterList.length * (parseFloat(value.substring(0, str.length - 1)) / 100));
                     }
                     else if (!isNaN(value)) {
                         val = Math.ceil(parseFloat(value));
@@ -400,7 +437,7 @@ var bot = {
                             val = 1;
                         }
                         //send data to constructor
-                        this.constructPlaylistStandard(tempMap, type, val);
+                        bot.constructPlaylistStandard(tempMap, type, val);
                     }
                 }
             }
@@ -422,7 +459,7 @@ var bot = {
         var themedata = JSON.parse(fs.readFileSync(themefile));
         var songslist = themedata.songs;
         //get a list of all songs in the masterlist
-        var templist = this.songsObjectMasterList;
+        var templist = bot.songsObjectMasterList;
         //for each song in the masterlist add it to a uri - song map
         templist.forEach(song => {
             tempMap.set(song.uri, song);
@@ -433,7 +470,7 @@ var bot = {
         });
         //initialize a map with an empty list for each possible rating between min and max
         rankMap = new Discord.Collection;
-        for (var i = this.min; i <= this.max; i++) {
+        for (var i = bot.min; i <= bot.max; i++) {
             rankMap.set(i, []);
         }
         //for each song in the master list use it's uri to get the rated data from tempMap and organizze it by rank instead
@@ -453,7 +490,7 @@ var bot = {
                     countdown -= map.get(i).length;
                 }
                 else {
-                    playlistsongs.concat(this.pickXSongs(map.get(i), countdown));
+                    playlistsongs.concat(bot.pickXSongs(map.get(i), countdown));
                     break;
                 }
             }
@@ -465,7 +502,7 @@ var bot = {
                     countdown -= map.get(i).length;
                 }
                 else {
-                    playlistsongs.concat(this.pickXSongs(map.get(i), countdown));
+                    playlistsongs.concat(bot.pickXSongs(map.get(i), countdown));
                     break;
                 }
             }
@@ -473,10 +510,10 @@ var bot = {
         else {
             console.log("Invalid creation type.");
         }
-        this.createSpotifyPlaylist(playlistsongs);
+        bot.createSpotifyPlaylist(playlistsongs);
     },
     constructPlaylistRank: function (map, val) {
-        this.createSpotifyPlaylist(map.get(val));
+        bot.createSpotifyPlaylist(map.get(val));
     },
     //picks X songs from the passed array and returns an array of selected songs
     pickXSongs: function (arr, x) {
@@ -494,23 +531,23 @@ var bot = {
     //adds new songs to the dynamic playlist
     createSpotifyPlaylist: function (playlistID, songs) {
         //actually make the playlist, songs is a list of song objects use song[i].uri to get the songs in spotify
-        var uris = this.songsToUris(songs);
-        if (playlistID == this.themelistID) {
-            this.clearDynamicList();
+        var uris = bot.songsToUris(songs);
+        if (playlistID == bot.themelistID) {
+            bot.clearDynamicList();
         }
         uris.forEach(uri => {
-            this.spotifyApi.addTracksToPlaylist(playlistID, uri);
+            bot.spotifyApi.addTracksToPlaylist(playlistID, uri);
         });
     },
     //removes all songs from the dynamic playlist
     clearDynamicList: function () {
-        var uris = this.getPlaylistUris(this.themelistID);
+        var uris = bot.getPlaylistUris(bot.themelistID);
         for (var i = 0; i < uris.length; i += 100) {
             if (uris.length - i > 100) {
-                this.spotifyApi.removeTracksFromPlaylist(this.themelistID, uris.slice(i, i + 100));
+                bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, uris.slice(i, i + 100));
             }
             else {
-                this.spotifyApi.removeTracksFromPlaylist(this.themelistID, uris.slice(i));
+                bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, uris.slice(i));
             }
         }
     },
@@ -525,43 +562,43 @@ var bot = {
     addSong: function (name, uri, value = 0) {
         //adds a song object to the master playlist rating playist and the rating maps
         tempSong = new Song(name, uri, value);
-        this.songsObjectMasterList.push(tempSong);
-        this.songsObjectRatingList.push(tempSong);
-        this.songsMap.set(uri, tempSong);
-        this.songlistMap.set(tempSong.value, this.songlistMap.get(tempSong.value).push(tempSong));
+        bot.songsObjectMasterList.push(tempSong);
+        bot.songsObjectRatingList.push(tempSong);
+        bot.songsMap.set(uri, tempSong);
+        bot.songlistMap.set(tempSong.value, bot.songlistMap.get(tempSong.value).push(tempSong));
     },
     removeSong: function (uri) {
         //removes a song from all lists
-        this.songsObjectMasterList = this.songsObjectMasterList.filter(song => song.uri != uri);
-        this.songsObjectRatingList = this.songsObjectRatingList.filter(song => song.uri != uri);
-        this.songsMap.set(uri, null);
-        this.songlistMap.set(this.songsMap.get(uri).value, this.songlistMap.get(this.songsMap.get(uri).value).filter(song => song.uri != uri));
+        bot.songsObjectMasterList = bot.songsObjectMasterList.filter(song => song.uri != uri);
+        bot.songsObjectRatingList = bot.songsObjectRatingList.filter(song => song.uri != uri);
+        bot.songsMap.set(uri, null);
+        bot.songlistMap.set(bot.songsMap.get(uri).value, bot.songlistMap.get(bot.songsMap.get(uri).value).filter(song => song.uri != uri));
     },
     changeSongVal: function (uri, change) {
         //updates rating values in songsMap
-        var tempSong = this.songsMap.get(uri);
+        var tempSong = bot.songsMap.get(uri);
         tempSong.value = tempSong.value + change;
-        this.songsMap.set(uri, tempSong);
+        bot.songsMap.set(uri, tempSong);
         //updates rating values in songlistMap
-        this.songlistMap.set(tempSong.value, this.songlistMap.get(tempSong.value).push(tempSong));
-        this.songlistMap.set((tempSong.value - change), this.songlistMap.get(tempSong.value - change).filter(song => song.uri != uri));
+        bot.songlistMap.set(tempSong.value, bot.songlistMap.get(tempSong.value).push(tempSong));
+        bot.songlistMap.set((tempSong.value - change), bot.songlistMap.get(tempSong.value - change).filter(song => song.uri != uri));
     },
 
     syncToMaster: function () {
         //compares the current theme file to the master list, after run theme file will have songs not on master list removed
         //consrtuct a map of the masterlist to make comparing easier
-        this.saveTheme();
-        this.loadTheme(this.theme);
+        bot.saveTheme();
+        bot.loadTheme(bot.theme);
         masterMap = new Discord.Collection;
-        this.songsObjectMasterList.forEach(song => {
+        bot.songsObjectMasterList.forEach(song => {
             masterMap.set(song.uri, song);
         });
-        this.songsObjectRatingList.forEach(song => {
+        bot.songsObjectRatingList.forEach(song => {
             if (masterMap.get(song.uri) == null) {
-                this.removeSong(uri);
+                bot.removeSong(uri);
             }
         });
-        this.saveTheme();
+        bot.saveTheme();
     },
 
     // ADD HERE //
@@ -624,11 +661,14 @@ client.once('ready', () => {
     console.log('SpotBot v0.1.0');
 });
 
-client.on('message', message => {
+client.on('messageCreate', message => {
     //ignore messages from itself
     if (message.author.bot) return;
+    if (!message.guild) {
+        //on dm receive
+    }
     //the message is in a text channel
-    else if (message.channel.type === 'text') {
+    else if (message.channel.type === 0) {
         //if the message starts with prefix
         if (message.content.startsWith(bot.prefix)) {
             //splits the message into words after the prefix
@@ -714,7 +754,7 @@ app.get('/callback', (req, res) => {
             );
             res.send('Success! You can now close the window.');
 
-            bot.loadSpot();
+            bot.startupSpotify();
 
             setInterval(async () => {
                 const data = await bot.spotifyApi.refreshAccessToken();

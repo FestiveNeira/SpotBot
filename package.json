@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": "Aria Vanevenhoven",
   "license": "ISC",
   "dependencies": {
     "discord.js": "^14.6.0",
