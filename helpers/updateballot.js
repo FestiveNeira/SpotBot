@@ -1,9 +1,14 @@
 module.exports = {
-    name: 'sendballot',
+    name: 'updateballot',
     secret: false,
-    description: "sends a song ballot to the desired channel",
-    execute(message, bot)
-    {
-        message.edit("🎶 Current Theme:" + bot.ratingTheme + " 🎶");
+    description: "updates an existing song ballot",
+    execute(message, bot) {
+        bot.client.channels.cache.get(message.channelId).messages.fetch(message.id)
+            .then(msg => {
+                msg.edit("🎶 Current Theme: " + bot.ratingtheme + " 🎶");
+            }).catch(err => {
+                console.log('no rating message found, sending new rating message');
+                bot.helpers('sendballot', bot.spotChannel, bot);
+            });
     }
 }  

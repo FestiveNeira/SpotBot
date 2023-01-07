@@ -33,11 +33,10 @@ module.exports = {
         })
         .then((uri) =>
         {
-            //find song obj in list
-            var song = bot.getSongByUri(uri, bot.songsObjectRatingList);
-
             //increment score
-            bot.changeSongVal(song, -3)
+            console.log('score decreased by 3');
+            bot.changeSongVal(uri, -3)
+            bot.saveTheme();
         })
         .catch((error) =>
         {

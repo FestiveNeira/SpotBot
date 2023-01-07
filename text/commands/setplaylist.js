@@ -10,7 +10,7 @@ module.exports = {
                 message.channel.send("Playlist set to " + args.join(' ') + ".");
             }
             else {
-                message.channel.send("Playlist failed to update.");
+                message.channel.send("Playlist failed to update, check that your input values ar valid\ncheck the spelling of your theme argument\nvalid types are top, bottom, and rank\nranks only fall between -25 and 25\nthe number of songs cannot exceed the number of songs in the master playlist");
             }
         }
     }
