@@ -2,8 +2,7 @@ module.exports = {
     name: 'removetheme',
     secret: false,
     description: "Removes a theme",
-    execute(message, args, bot)
-    {
+    execute(message, args, bot) {
         let themeName = args.join(' ').toLowerCase();
         var success = bot.delTheme(themeName);
         if (success) {

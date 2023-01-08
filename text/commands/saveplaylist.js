@@ -2,8 +2,7 @@ module.exports = {
     name: 'saveplaylist',
     secret: false,
     description: "saves the current playlist as a duplicate",
-    execute(message, args, bot)
-    {
+    execute(message, args, bot) {
         if (args.length == 2) {
             var name = args[0];
             var public;

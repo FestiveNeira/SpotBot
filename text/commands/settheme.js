@@ -2,8 +2,7 @@ module.exports = {
     name: 'settheme',
     secret: false,
     description: "Changes the rating theme",
-    execute(message, args, bot)
-    {
+    execute(message, args, bot) {
         let themeName = args.join(' ').toLowerCase();
         bot.saveTheme();
         if (bot.themeExists(themeName)) {
