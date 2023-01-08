@@ -25,17 +25,18 @@ module.exports = {
         })
         .then(function (data)
         {
-            //current song uri
+            //current song data
+            var name = data.body.item.name;
             var uri = data.body.item.uri;
 
             //check for the uri in the masterlist
-            return bot.checkMasterForUri(uri, false);
+            return bot.checkMasterForUri(name, uri, false);
         })
         .then((uri) =>
         {
             //increment score
             console.log('score decreased by 3');
-            bot.changeSongVal(uri, -3)
+            bot.changeSongVal(uri, -3);
             bot.saveTheme();
         })
         .catch((error) =>

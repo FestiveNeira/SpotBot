@@ -19,7 +19,7 @@ const client = new Discord.Client({
         Partials.Message
     ]
 })
-
+// convert lists to collections
 const fs = require('fs');
 const express = require('express');
 
@@ -83,9 +83,9 @@ var bot = {
     max: 25,
 
     //array of song objects in master playlist
-    songsObjectMasterList: [],
+    songsObjectMasterList: new Discord.Collection,
     //array of song objects
-    songsObjectRatingList: [],
+    songsObjectRatingList: new Discord.Collection,
 
     //map of songs in theme playlist to song objects, key is song uri
     songsMap: new Discord.Collection,
@@ -184,8 +184,8 @@ var bot = {
                     tracks.forEach(item => {
                         //only support non-local songs
                         if (item.track.uri.indexOf("spotify:local") == -1) {
-                            let newsong = new Song(item.track.name, item.track.uri, 0);
-                            bot.songsObjectMasterList.push(newsong);
+                            let newsong = JSON.parse(JSON.stringify(new Song(item.track.name, item.track.uri, 0)));
+                            bot.songsObjectMasterList.set(newsong.uri, newsong);
                         }
                         else {
                             console.log(item.track.uri + " is local and unsupported.");
@@ -302,22 +302,23 @@ var bot = {
         //creates songsMap and initializes songlistMap
         //initializes songlistMap indexes
         for (var i = bot.min; i <= bot.max; i++) {
-            bot.songlistMap.set(i, []);
+            bot.songlistMap.set(i, new Discord.Collection);
         }
-        bot.songsObjectMasterList.forEach(song => {
+        bot.songsObjectMasterList.forEach((song, key) => {
             bot.songsMap.set(song.uri, song);
         });
     },
 
     //save and load theme data for ratings
     saveTheme: function () {
+        bot.songsObjectRatingList = new Discord.Collection;
         //write the current playlist theme to ./data/spotify/themes/---theme---.json
-        bot.songsObjectRatingList.forEach(song => {
-            song = bot.songsMap.get(song.uri);
+        bot.songsMap.forEach((song, key) => {
+            bot.songsObjectRatingList.set(key, song);
         });
 
         var playlistthemesongs = {
-            songs: bot.songsObjectRatingList
+            songs: Array.from(bot.songsObjectRatingList.values())
         }
 
         var themefile = './data/spotify/themes/' + bot.ratingtheme + '.json';
@@ -335,19 +336,36 @@ var bot = {
             var themefile = './data/spotify/themes/' + newtheme + '.json';
             var themedata = JSON.parse(fs.readFileSync(themefile));
             var songslist = themedata.songs;
-            bot.songsObjectRatingList = songslist;
+
+            songslist.forEach(song => {
+                bot.songsObjectRatingList.set(song.uri, song);
+            });
 
             bot.initSongsMap();
 
+            //redo section now that it's collections
+            //fill a map with all the default values from the master list
+            tempMap = new Discord.Collection;
+            bot.songsObjectMasterList.forEach((song, key) => {
+                tempMap.set(song.uri, song);
+            });
             //after reading apply values to rating map to help update scores, key is uri
             songslist.forEach(song => {
-                bot.songlistMap.get(song.value).push(song);
-                bot.songsMap.set(song.uri, song);
+                tempMap.set(song.uri, song);
             });
+            //fill the maps and rating list
+            bot.songsObjectRatingList = new Discord.Collection;
+            tempMap.forEach((song, key) => {
+                bot.songsObjectRatingList.set(key, song);
+                bot.songsMap.set(song.uri, song);
+                bot.songlistMap.get(song.value).set(song.uri, song);
+            });
+
             bot.ratingtheme = newtheme;
 
             bot.syncToMaster();
             bot.saveSettings();
+            bot.saveTheme();
 
             //change ratingMessage content
             if (bot.ratingMessage != null && bot.ratingMessage != "") {
@@ -384,7 +402,7 @@ var bot = {
             bot.themeslist.push(newtheme);
 
             var playlistthemesongs = {
-                songs: bot.songsObjectMasterList
+                songs: Array.from(bot.songsObjectMasterList.values())
             }
 
             //saves theme to a .json file
@@ -420,14 +438,30 @@ var bot = {
         return false;
     },
 
-    checkMasterForUri: function (uri, add) {
+    checkMasterForUri: function (name, uri, add) {
         return new Promise((resolve, reject) =>
         {
             //can be used to auto add liked songs to master list INCOMPLETE
             if (add) {
-
+                masterMap = new Discord.Collection;
+                bot.songsObjectMasterList.forEach((song, key) => {
+                    masterMap.set(song.uri, song);
+                });
+                if (masterMap.get(uri) == null) {
+                    //add the song to all active lists
+                    bot.spotifyApi.addTracksToPlaylist(this.seaID, [uri])
+                    .then(() => {
+                        this.addSong(name, uri);
+                        resolve(uri);
+                    });
+                }
+                else {
+                    resolve(uri);
+                }
             }
-            resolve(uri);
+            else {
+                resolve(uri);
+            }
         })
     },
     getSongByUri: function (uri, songs) {
@@ -487,7 +521,7 @@ var bot = {
                 }
                 else {
                     if (value.includes("%") && !isNaN(value.substring(0, str.length - 1))) {
-                        val = Math.ceil(bot.songsObjectMasterList.length * (parseFloat(value.substring(0, str.length - 1)) / 100));
+                        val = Math.ceil(bot.songsObjectMasterList.size * (parseFloat(value.substring(0, str.length - 1)) / 100));
                     }
                     else if (!isNaN(value)) {
                         val = Math.ceil(parseFloat(value));
@@ -498,7 +532,7 @@ var bot = {
                         console.log("Invalid value type.");
                     }
                     //check that val is in range
-                    if (val < 0 || val > bot.songsObjectMasterList.length) {
+                    if (val < 0 || val > bot.songsObjectMasterList.size) {
                         run = false;
                     }
                     if (run) {
@@ -541,7 +575,7 @@ var bot = {
         var themedata = JSON.parse(fs.readFileSync(themefile));
         var songslist = themedata.songs;
         //get a list of all songs in the masterlist
-        var templist = bot.songsObjectMasterList;
+        var templist = Array.from(bot.songsObjectMasterList.values());
         //for each song in the masterlist add it to a uri - song map
         templist.forEach(song => {
             tempMap.set(song.uri, song);
@@ -673,52 +707,58 @@ var bot = {
 
     addSong: function (name, uri, value = 0) {
         //adds a song object to the master playlist rating playist and the rating maps
-        tempSong = new Song(name, uri, value);
-        bot.songsObjectMasterList.push(tempSong);
-        bot.songsObjectRatingList.push(tempSong);
+        tempSong = JSON.parse(JSON.stringify(new Song(name, uri, value)));
+        bot.songsObjectMasterList.set(tempSong.uri, tempSong);
+        bot.songsObjectRatingList.set(tempSong.uri, tempSong);
         bot.songsMap.set(uri, tempSong);
-        bot.songlistMap.set(tempSong.value, bot.songlistMap.get(tempSong.value).push(tempSong));
+        bot.songlistMap.get(tempSong.value).set(tempSong.uri, tempSong);
+        bot.saveTheme();
 
         //log activity
         bot.client.channels.cache.get(this.spotLogChat).send("Song Added To Lists");
     },
     removeSong: function (uri) {
         //removes a song from all lists
-        bot.songsObjectMasterList = bot.songsObjectMasterList.filter(song => song.uri != uri);
-        bot.songsObjectRatingList = bot.songsObjectRatingList.filter(song => song.uri != uri);
-        bot.songsMap.set(uri, null);
-        bot.songlistMap.set(bot.songsMap.get(uri).value, bot.songlistMap.get(bot.songsMap.get(uri).value).filter(song => song.uri != uri));
+        bot.songsObjectMasterList.delete(uri);
+        bot.songsObjectRatingList.delete(uri);
+        bot.songlistMap.get(bot.songsMap.get(uri).value).delete(uri);
+        bot.songsMap.delete(uri);
+        bot.saveTheme();
 
         //log activity
         bot.client.channels.cache.get(this.spotLogChat).send("Song Removed From Lists");
     },
     changeSongVal: function (uri, change) {
         //updates rating values in songsMap
-        var tempSong = bot.songsMap.get(uri);
-        tempSong.value = tempSong.value + change;
-        bot.songsMap.set(uri, tempSong);
+        var song = this.songsMap.get(uri);
+        song.value = song.value + change;
+        bot.songsMap.set(song.uri, song);
         //updates rating values in songlistMap
-        bot.songlistMap.set(tempSong.value, bot.songlistMap.get(tempSong.value).push(tempSong));
-        bot.songlistMap.set((tempSong.value - change), bot.songlistMap.get(tempSong.value - change).filter(song => song.uri != uri));
+        bot.songlistMap.get(song.value).set(song.uri, song);
+        bot.songlistMap.get(song.value - change).delete(song.uri);
 
         //log activity
-        bot.client.channels.cache.get(this.spotLogChat).send("'" + tempSong.name + "' Value Updated By " + change);
+        bot.client.channels.cache.get(this.spotLogChat).send("'" + song.name + "' Value Updated By " + change);
     },
 
     syncToMaster: function () {
         //compares the current theme file to the master list, after run theme file will have songs not on master list removed
         //consrtuct a map of the masterlist to make comparing easier
-        bot.saveTheme();
+        var changed = false;
         masterMap = new Discord.Collection;
-        bot.songsObjectMasterList.forEach(song => {
+        bot.songsObjectMasterList.forEach((song, key) => {
             masterMap.set(song.uri, song);
         });
-        bot.songsObjectRatingList.forEach(song => {
+        bot.songsObjectRatingList.forEach((song, key) => {
             if (masterMap.get(song.uri) == null) {
-                bot.removeSong(uri);
+                bot.removeSong(song.uri);
+                changed = true;
             }
         });
-        bot.saveTheme();
+
+        if (changed) {
+            bot.saveTheme();
+        }
 
         //log activity
         bot.client.channels.cache.get(this.spotLogChat).send("Playlist Theme Synced To Master");
