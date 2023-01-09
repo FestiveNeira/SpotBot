@@ -66,7 +66,7 @@ var bot = {
     spotifyApi: new SpotifyWebApi({
         clientId: clientId,
         clientSecret: clientSecret,
-        redirectUri: 'http:// Localhost:8888/callback'
+        redirectUri: 'http://localhost:8888/callback'
     }),
     // Min and max scores allowed
     min: -25,
@@ -935,7 +935,7 @@ app.get('/callback', (req, res) => {
 
 app.listen(8888, () =>
     console.log(
-        'HTTP Server up. Now go to http:// Localhost:8888/login in your browser.'
+        'HTTP Server up. Now go to http://localhost:8888/login in your browser.'
     )
 );
 
