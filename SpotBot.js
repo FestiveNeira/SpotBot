@@ -107,6 +107,9 @@ var bot = {
     },
     // Load spotify and song data
     startupSpotify: async function () {
+        // Log activity
+        console.log("Bot Logged Into Spotify");
+        bot.client.channels.cache.get(this.spotLogChat).send("Bot Logged Into Spotify");
         // Load settings (playlist theme, playlist setting (int or %), rating theme)
         bot.loadSettings();
         // Load master playlist and updates
@@ -119,17 +122,19 @@ var bot = {
                 if (bot.ratingMessage == null) {
                     bot.helpers('sendballot', bot.spotChannel, bot);
                 }
-                console.log('Bot Loaded');
-
-                // Log activity
-                bot.client.channels.cache.get(this.spotLogChat).send("Bot Logged Into Spotify");
             });
+
+        // Log activity
+        console.log("Bot Loaded");
+        bot.client.channels.cache.get(this.spotLogChat).send("Bot Loaded");
     },
     // Handles reading in the master song list
     loadMaster: function () {
         return new Promise((resolve, reject) => {
+            // Log activity
+            console.log("Reading Master Playlist");
+            bot.client.channels.cache.get(this.spotLogChat).send("Reading Master Playlist");
             // Load masterlist from spotify
-            console.log("reading master list");
             bot.getTracks(bot.seaID)
                 .then(tracks => {
                     tracks.forEach(item => {
@@ -139,24 +144,28 @@ var bot = {
                             bot.songsObjectMasterList.set(newsong.uri, newsong);
                         }
                         else {
-                            console.log(item.track.uri + " is local and unsupported.");
+                            // Log activity
+                            console.log("'" + item.track.name + "' Is Local And Unsupported");
+                            bot.client.channels.cache.get(this.spotLogChat).send("'" + item.track.name + "' Is Local And Unsupported");
                         }
                     });
-                    console.log("master list has been read");
 
                     // Log activity
+                    console.log("Master Playlist Loaded");
                     bot.client.channels.cache.get(this.spotLogChat).send("Master Playlist Loaded");
                     resolve();
                 });
         })
             .catch(function (error) {
                 if (error.statusCode === 500 || error.statusCode === 502) {
-                    console.log("Server error while reading the master list, trying again");
+                    // If there's a server error try again
                     bot.loadMaster()
                         .then(() => resolve())
                 }
                 else {
-                    console.log('Something went wrong while reading the master list');
+                    // Log activity
+                    console.log("Something Went Wrong While Reading Master List");
+                    bot.client.channels.cache.get(this.spotLogChat).send("Something Went Wrong While Reading Master List");
                     console.log(error);
                 }
             });
@@ -273,8 +282,8 @@ var bot = {
             }
 
             // Log activity
-            console.log('theme loaded');
-            bot.client.channels.cache.get(this.spotLogChat).send('Theme Loaded');
+            console.log("Theme Loaded");
+            bot.client.channels.cache.get(this.spotLogChat).send("Theme Loaded");
 
             // Sync the data to the masterlist
             bot.syncToMaster();
@@ -283,9 +292,8 @@ var bot = {
             bot.saveTheme();
         }
         else {
-
             // Log activity
-            console.log("Theme does not exist. (loading error)");
+            console.log("Theme Does Not Exist");
             bot.client.channels.cache.get(this.spotLogChat).send("Theme Does Not Exist");
         }
     },
@@ -364,15 +372,13 @@ var bot = {
                 // Error handling 
                 .catch(function (error) {
                     if (error.statusCode === 500 || error.statusCode === 502) {
-                        // Report server error
-                        console.log("Server error, trying again");
-                        // Try again
+                        // If there's a server error try again
                         bot.getTracks(playlistID)
                             // Resolve with results of successful attempt
                             .then((tracks) => resolve(tracks))
                     }
                     else {
-                        console.log('Something went wrong in getTracks');
+                        console.log("Something Went Wrong In getTracks");
                         console.log(error);
                     }
                 });
@@ -383,7 +389,11 @@ var bot = {
         // Add the next batch of tracks onto the total list of tracks
         Array.prototype.push.apply(totTracks, newTracks);
 
-        if (totTracks.length < goal) { console.log("reading chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100))); }
+        if (totTracks.length < goal) {
+            // Log activity
+            console.log("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
+            bot.client.channels.cache.get(this.spotLogChat).send("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
+        }
 
         // Return a promise 
         return new Promise((resolve, reject) => {
@@ -401,15 +411,13 @@ var bot = {
                     // Error handling
                     .catch(function (error) {
                         if (error.statusCode === 500 || error.statusCode === 502) {
-                            // Report server error
-                            console.log("Server error, trying again");
-                            // Try again
+                            // If there's a server error try again
                             bot.getTracks(playlistID)
                                 // Resolve with results of successful attempt
                                 .then((tracks) => resolve(tracks))
                         }
                         else {
-                            console.log('Something went wrong in readTracks');
+                            console.log("Something Went Wrong In readTracks");
                             console.log(error);
                         }
                     });
@@ -430,7 +438,6 @@ var bot = {
                             uris.push(item.track.uri);
                         }
                     });
-                    console.log('uris retrieved');
                     // Resolve the uri list out to be used
                     resolve(uris);
                 });
@@ -549,7 +556,7 @@ var bot = {
     // Loads the theme playlist with the most recent settings
     reloadPlaylist: function () {
         // Log activity
-        console.log("reloading playlist");
+        console.log("Reloading Playlist");
         bot.client.channels.cache.get(this.spotLogChat).send("Reloading Playlist");
 
         // Reload the playlist with the previously used data
@@ -615,7 +622,7 @@ var bot = {
             }
             else {
                 // Log activity
-                console.log("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
+                console.log("Playlist Failed To Update");
                 bot.client.channels.cache.get(this.spotLogChat).send("Playlist Failed To Update");
                 return false;
             }
@@ -719,7 +726,7 @@ var bot = {
                             });
                     });
                     // Log activity
-                    console.log('Theme Playlist Cleared');
+                    console.log("Theme Playlist Cleared");
                     bot.client.channels.cache.get(this.spotLogChat).send("Theme Playlist Cleared");
                     resolve();
                 });
@@ -822,7 +829,7 @@ for (const file of files) {
 // When bot loads
 client.once('ready', () => {
     bot.startup();
-    console.log('SpotBot v0.1.0');
+    console.log("SpotBot v0.1.0");
 });
 
 // For bot commands
@@ -915,7 +922,7 @@ app.get('/callback', (req, res) => {
             console.log(
                 `Successfully retrieved access token. Expires in ${expires_in} s.`
             );
-            res.send('Success! You can now close the window.');
+            res.send("Success! You can now close the window.");
 
             bot.startupSpotify();
 
@@ -923,19 +930,19 @@ app.get('/callback', (req, res) => {
                 const data = await bot.spotifyApi.refreshAccessToken();
                 const access_token = data.body['access_token'];
 
-                console.log('The access token has been refreshed!');
+                console.log("The access token has been refreshed!");
                 bot.spotifyApi.setAccessToken(access_token);
             }, expires_in / 2 * 1000);
         })
         .catch(error => {
-            console.error('Error getting Tokens:', error);
+            console.error("Error getting Tokens:", error);
             res.send(`Error getting Tokens: ${error}`);
         });
 });
 
 app.listen(8888, () =>
     console.log(
-        'HTTP Server up. Now go to http://localhost:8888/login in your browser.'
+        "HTTP Server up. Now go to http://localhost:8888/login in your browser."
     )
 );
 
