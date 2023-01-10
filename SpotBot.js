@@ -122,11 +122,11 @@ var bot = {
                 if (bot.ratingMessage == null) {
                     bot.helpers('sendballot', bot.spotChannel, bot);
                 }
-            });
 
-        // Log activity
-        console.log("Bot Loaded");
-        bot.client.channels.cache.get(bot.spotLogChat).send("Bot Loaded");
+                // Log activity
+                console.log("Bot Loaded");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Bot Loaded");
+            });
     },
     // Handles reading in the master song list
     loadMaster: function () {
