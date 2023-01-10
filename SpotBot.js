@@ -103,13 +103,13 @@ var bot = {
 
         // Log activity
         console.log("Bot Logged Into Discord");
-        bot.client.channels.cache.get(this.spotLogChat).send("Bot Logged Into Discord");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Discord");
     },
     // Load spotify and song data
     startupSpotify: async function () {
         // Log activity
         console.log("Bot Logged Into Spotify");
-        bot.client.channels.cache.get(this.spotLogChat).send("Bot Logged Into Spotify");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Spotify");
         // Load settings (playlist theme, playlist setting (int or %), rating theme)
         bot.loadSettings();
         // Load master playlist and updates
@@ -126,14 +126,14 @@ var bot = {
 
         // Log activity
         console.log("Bot Loaded");
-        bot.client.channels.cache.get(this.spotLogChat).send("Bot Loaded");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Bot Loaded");
     },
     // Handles reading in the master song list
     loadMaster: function () {
         return new Promise((resolve, reject) => {
             // Log activity
             console.log("Reading Master Playlist");
-            bot.client.channels.cache.get(this.spotLogChat).send("Reading Master Playlist");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Reading Master Playlist");
             // Load masterlist from spotify
             bot.getTracks(bot.seaID)
                 .then(tracks => {
@@ -146,13 +146,13 @@ var bot = {
                         else {
                             // Log activity
                             console.log("'" + item.track.name + "' Is Local And Unsupported");
-                            bot.client.channels.cache.get(this.spotLogChat).send("'" + item.track.name + "' Is Local And Unsupported");
+                            bot.client.channels.cache.get(bot.spotLogChat).send("'" + item.track.name + "' Is Local And Unsupported");
                         }
                     });
 
                     // Log activity
                     console.log("Master Playlist Loaded");
-                    bot.client.channels.cache.get(this.spotLogChat).send("Master Playlist Loaded");
+                    bot.client.channels.cache.get(bot.spotLogChat).send("Master Playlist Loaded");
                     resolve();
                 });
         })
@@ -165,7 +165,7 @@ var bot = {
                 else {
                     // Log activity
                     console.log("Something Went Wrong While Reading Master List");
-                    bot.client.channels.cache.get(this.spotLogChat).send("Something Went Wrong While Reading Master List");
+                    bot.client.channels.cache.get(bot.spotLogChat).send("Something Went Wrong While Reading Master List");
                     console.log(error);
                 }
             });
@@ -199,7 +199,7 @@ var bot = {
         });
 
         // Log activity
-        bot.client.channels.cache.get(this.spotLogChat).send("Settings Saved");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Settings Saved");
     },
     loadSettings: function () {
         // Get saved settings
@@ -217,7 +217,7 @@ var bot = {
         bot.ratingMessage = settings.ratmsg;
 
         // Log activity
-        bot.client.channels.cache.get(this.spotLogChat).send("Settings Loaded");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Settings Loaded");
 
         bot.saveSettings();
     },
@@ -244,7 +244,7 @@ var bot = {
         });
 
         // Log activity
-        bot.client.channels.cache.get(this.spotLogChat).send("Theme Data Saved");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Theme Data Saved");
     },
     loadTheme: function (newtheme) {
         if (bot.themeslist.indexOf(newtheme) != -1) {
@@ -283,7 +283,7 @@ var bot = {
 
             // Log activity
             console.log("Theme Loaded");
-            bot.client.channels.cache.get(this.spotLogChat).send("Theme Loaded");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Theme Loaded");
 
             // Sync the data to the masterlist
             bot.syncToMaster();
@@ -294,7 +294,7 @@ var bot = {
         else {
             // Log activity
             console.log("Theme Does Not Exist");
-            bot.client.channels.cache.get(this.spotLogChat).send("Theme Does Not Exist");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Theme Does Not Exist");
         }
     },
     // Compares the current theme file to the master list, after run theme file will have songs not on master list removed
@@ -306,7 +306,7 @@ var bot = {
         });
 
         // Log activity
-        bot.client.channels.cache.get(this.spotLogChat).send("Playlist Theme Synced To Master");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Theme Synced To Master");
     },
     // ------------------------------------------------------------ //
 
@@ -329,7 +329,7 @@ var bot = {
             });
 
             // Log activity
-            bot.client.channels.cache.get(this.spotLogChat).send("New Theme '" + newtheme + "' Created");
+            bot.client.channels.cache.get(bot.spotLogChat).send("New Theme '" + newtheme + "' Created");
 
             // Save changes to settings
             bot.saveSettings();
@@ -348,7 +348,7 @@ var bot = {
             fs.unlinkSync(themefile);
 
             // Log activity
-            bot.client.channels.cache.get(this.spotLogChat).send("Theme '" + theme + "' Deleted");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Theme '" + theme + "' Deleted");
 
             // Save changes to settings
             bot.saveSettings();
@@ -392,7 +392,7 @@ var bot = {
         if (totTracks.length < goal) {
             // Log activity
             console.log("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
-            bot.client.channels.cache.get(this.spotLogChat).send("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
+            bot.client.channels.cache.get(bot.spotLogChat).send("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
         }
 
         // Return a promise 
@@ -477,11 +477,11 @@ var bot = {
             if (add) {
                 if (bot.songsObjectMasterList.get(uri) == null) {
                     // Log activity
-                    bot.client.channels.cache.get(this.spotLogChat).send("Adding " + name + " To The Master Playlist");
+                    bot.client.channels.cache.get(bot.spotLogChat).send("Adding " + name + " To The Master Playlist");
                     // Add the song to all active lists
-                    bot.spotifyApi.addTracksToPlaylist(this.seaID, [uri])
+                    bot.spotifyApi.addTracksToPlaylist(bot.seaID, [uri])
                         .then(() => {
-                            this.addSong(name, uri);
+                            bot.addSong(name, uri);
                             resolve(uri);
                         });
                 }
@@ -498,7 +498,7 @@ var bot = {
     addSong: function (name, uri, value = 0) {
         // Log activity
         console.log("Adding '" + bot.songsObjectRatingMap.get(uri).name + "' To Lists");
-        bot.client.channels.cache.get(this.spotLogChat).send("Adding '" + name + "' To Lists");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Adding '" + name + "' To Lists");
 
         tempSong = new Song(name, uri, value);
         bot.songsObjectMasterList.set(tempSong.uri, new Song(name, uri, value));
@@ -510,7 +510,7 @@ var bot = {
     removeSong: function (uri) {
         // Log activity
         console.log("Removing '" + bot.songsObjectRatingMap.get(uri).name + "' From Lists");
-        bot.client.channels.cache.get(this.spotLogChat).send("Removing '" + bot.songsObjectRatingMap.get(uri).name + "' From Lists");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Removing '" + bot.songsObjectRatingMap.get(uri).name + "' From Lists");
 
         bot.songsObjectRankMap.get(bot.songsObjectRatingMap.get(uri).value).delete(uri);
         bot.songsObjectRatingMap.delete(uri);
@@ -528,7 +528,7 @@ var bot = {
 
         // Log activity
         console.log("'" + song.name + "' Value Updated To " + song.value);
-        bot.client.channels.cache.get(this.spotLogChat).send("'" + song.name + "' Value Updated To " + song.value);
+        bot.client.channels.cache.get(bot.spotLogChat).send("'" + song.name + "' Value Updated To " + song.value);
     },
     // ------------------------------------------------------------ //
 
@@ -550,14 +550,14 @@ var bot = {
 
                 // Log activity
                 console.log("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
-                bot.client.channels.cache.get(this.spotLogChat).send("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
             });
     },
     // Loads the theme playlist with the most recent settings
     reloadPlaylist: function () {
         // Log activity
         console.log("Reloading Playlist");
-        bot.client.channels.cache.get(this.spotLogChat).send("Reloading Playlist");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Reloading Playlist");
 
         // Reload the playlist with the previously used data
         bot.setPlaylist(bot.playlisttheme, bot.playsetting, bot.playvalue);
@@ -593,7 +593,7 @@ var bot = {
                         run = false;
                         // Log activity
                         console.log("Invalid Value Type");
-                        bot.client.channels.cache.get(this.spotLogChat).send("Invalid Value Type");
+                        bot.client.channels.cache.get(bot.spotLogChat).send("Invalid Value Type");
                     }
                     // Check that val is in range
                     if (val < 0 || val > bot.songsObjectMasterList.size) {
@@ -612,25 +612,25 @@ var bot = {
             }
             else {
                 console.log("Theme Does Not Exist");
-                bot.client.channels.cache.get(this.spotLogChat).send("Theme Does Not Exist");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Does Not Exist");
             }
             if (run) {
                 // Log activity
                 console.log("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
-                bot.client.channels.cache.get(this.spotLogChat).send("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
                 return true;
             }
             else {
                 // Log activity
                 console.log("Playlist Failed To Update");
-                bot.client.channels.cache.get(this.spotLogChat).send("Playlist Failed To Update");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Failed To Update");
                 return false;
             }
         }
         catch {
             // Log activity
             console.log("Playlist Failed To Update");
-            bot.client.channels.cache.get(this.spotLogChat).send("Playlist Failed To Update");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Failed To Update");
             return false;
         }
     },
@@ -694,12 +694,12 @@ var bot = {
         else {
             // Log activity
             console.log("Invalid Creation Type.");
-            bot.client.channels.cache.get(this.spotLogChat).send("Invalid Creation Type");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Invalid Creation Type");
         }
-        bot.createSpotifyPlaylist(this.themelistID, playlistsongs);
+        bot.createSpotifyPlaylist(bot.themelistID, playlistsongs);
     },
     constructPlaylistRank: function (map, val) {
-        bot.createSpotifyPlaylist(this.themelistID, map.get(val));
+        bot.createSpotifyPlaylist(bot.themelistID, map.get(val));
     },
     // Picks X songs from the passed array and returns an array of selected songs
     pickXSongs: function (arr, x) {
@@ -727,7 +727,7 @@ var bot = {
                     });
                     // Log activity
                     console.log("Theme Playlist Cleared");
-                    bot.client.channels.cache.get(this.spotLogChat).send("Theme Playlist Cleared");
+                    bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Cleared");
                     resolve();
                 });
         });
@@ -746,7 +746,7 @@ var bot = {
                 });
                 // Log activity
                 console.log("Theme Playlist Songs Loaded");
-                bot.client.channels.cache.get(this.spotLogChat).send("Theme Playlist Songs Loaded");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
             });
     },
     // If a song is failed to add, retry until success
