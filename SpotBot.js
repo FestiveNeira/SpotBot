@@ -29,6 +29,10 @@ const e = require("express");
 
 const app = express();
 
+// Variable used to tell if both discord and spotify have loaded is set to true when the first loads, when the second loads the bot starts
+// this exists because sometimes they load in different orders so I don't know when to start doing things
+var canLoad = false;
+
 class Song {
     constructor(name, uri, value) {
         this.name = name;
@@ -46,10 +50,6 @@ var bot = {
     ariDM: '946077905199435836', // Unused
     ariID: '946077905199435836', // Unused
     botID: '1043633807267467415', // Unused
-
-    // Variable used to tell if both discord and spotify have loaded is set to true when the first loads, when the second loads the bot starts
-    // this exists because sometimes they load in different orders so I don't know when to start doing things
-    canLoad: false,
 
     // Discord Variables
     // Channel ID for rating songs
@@ -104,17 +104,15 @@ var bot = {
     // ----------------------- INITIAL LOAD ----------------------- //
     // Runs with on ready
     startup: function () {
-        // Runs after startup, but before spotify logs in
         // Log activity
         console.log("Bot Logged Into Discord");
-        bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Discord");
 
         // Start loading stuff if spotify and discord are both loaded
-        if (bot.canLoad) {
+        if (canLoad) {
             bot.startupSpotify();
         }
         else {
-            bot.canLoad = true;
+            canLoad = true;
         }
     },
     // Load spotify and song data
@@ -864,7 +862,6 @@ for (const file of files) {
 
 // When bot loads
 client.once('ready', () => {
-    console.log("SpotBot v0.1.0");
     bot.startup();
 });
 
@@ -962,14 +959,13 @@ app.get('/callback', (req, res) => {
 
             // Log activity
             console.log("Bot Logged Into Spotify");
-            bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Spotify");
 
             // Start loading stuff if spotify and discord are both loaded
-            if (bot.canLoad) {
+            if (canLoad) {
                 bot.startupSpotify();
             }
             else {
-                bot.canLoad = true;
+                canLoad = true;
             }
 
             setInterval(async () => {
@@ -993,3 +989,5 @@ app.listen(8888, () =>
 );
 
 client.login(bot.tokenDiscord);
+
+console.log("SpotBot v1.0.0");
