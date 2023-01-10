@@ -25,6 +25,7 @@ const express = require('express');
 
 const { tokenDiscord, clientId, clientSecret } = require('./data/config.json');
 const { resolve } = require('path');
+const e = require("express");
 
 const app = express();
 
@@ -45,6 +46,10 @@ var bot = {
     ariDM: '946077905199435836', // Unused
     ariID: '946077905199435836', // Unused
     botID: '1043633807267467415', // Unused
+
+    // Variable used to tell if both discord and spotify have loaded is set to true when the first loads, when the second loads the bot starts
+    // this exists because sometimes they load in different orders so I don't know when to start doing things
+    canLoad: false,
 
     // Discord Variables
     // Channel ID for rating songs
@@ -98,23 +103,27 @@ var bot = {
 
     // ----------------------- INITIAL LOAD ----------------------- //
     // Runs with on ready
-    startup: async function () {
+    startup: function () {
         // Runs after startup, but before spotify logs in
-
         // Log activity
         console.log("Bot Logged Into Discord");
         bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Discord");
+
+        // Start loading stuff if spotify and discord are both loaded
+        if (bot.canLoad) {
+            bot.startupSpotify();
+        }
+        else {
+            bot.canLoad = true;
+        }
     },
     // Load spotify and song data
-    startupSpotify: async function () {
-        // Log activity
-        console.log("Bot Logged Into Spotify");
-        bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Spotify");
-        // Load settings (playlist theme, playlist setting (int or %), rating theme)
-        bot.loadSettings();
+    startupSpotify: function () {
         // Load master playlist and updates
         bot.loadMaster()
             .then(() => {
+                // Load settings (playlist theme, playlist setting (int or %), rating theme)
+                bot.loadSettings();
                 // Load song maps and scores
                 bot.loadTheme(bot.ratingtheme);
                 // Reload playlist
@@ -199,6 +208,7 @@ var bot = {
         });
 
         // Log activity
+        console.log("Settings Saved");
         bot.client.channels.cache.get(bot.spotLogChat).send("Settings Saved");
     },
     loadSettings: function () {
@@ -217,6 +227,7 @@ var bot = {
         bot.ratingMessage = settings.ratmsg;
 
         // Log activity
+        console.log("Settings Loaded");
         bot.client.channels.cache.get(bot.spotLogChat).send("Settings Loaded");
 
         bot.saveSettings();
@@ -244,6 +255,7 @@ var bot = {
         });
 
         // Log activity
+        console.log("Theme Data Saved");
         bot.client.channels.cache.get(bot.spotLogChat).send("Theme Data Saved");
     },
     loadTheme: function (newtheme) {
@@ -306,6 +318,7 @@ var bot = {
         });
 
         // Log activity
+        console.log("Playlist Theme Synced To Master");
         bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Theme Synced To Master");
     },
     // ------------------------------------------------------------ //
@@ -329,6 +342,7 @@ var bot = {
             });
 
             // Log activity
+            console.log("New Theme '" + newtheme + "' Created");
             bot.client.channels.cache.get(bot.spotLogChat).send("New Theme '" + newtheme + "' Created");
 
             // Save changes to settings
@@ -348,6 +362,7 @@ var bot = {
             fs.unlinkSync(themefile);
 
             // Log activity
+            console.log("Theme '" + theme + "' Deleted");
             bot.client.channels.cache.get(bot.spotLogChat).send("Theme '" + theme + "' Deleted");
 
             // Save changes to settings
@@ -410,7 +425,8 @@ var bot = {
                     .then((result) => resolve(result))
                     // Error handling
                     .catch(function (error) {
-                        if (error.statusCode === 500 || error.statusCode === 502) {
+                        if (error.statusCode === 500 || error.statusCode === 502 || error.statusCode === 429) {
+                            console.log('server error') // delete
                             // If there's a server error try again
                             bot.getTracks(playlistID)
                                 // Resolve with results of successful attempt
@@ -460,6 +476,19 @@ var bot = {
         }
         return songs;
     },
+    playlistChunkBuilder: function (uris, remove) {
+        var arr = [];
+        for (i = 0; i < uris.length; i += 100) {
+            var temp = uris.slice(i, i + 100);
+            if (remove) {
+                for (var o = 0; o < temp.length; o++) {
+                    temp[o] = { uri: temp[o] };
+                }
+            }
+            arr.push(temp);
+        }
+        return arr;
+    },
     themeExists: function (theme) {
         //checks to see if theme exists
         if (bot.themeslist.indexOf(theme) != -1) {
@@ -477,6 +506,7 @@ var bot = {
             if (add) {
                 if (bot.songsObjectMasterList.get(uri) == null) {
                     // Log activity
+                    console.log("Adding " + name + " To The Master Playlist");
                     bot.client.channels.cache.get(bot.spotLogChat).send("Adding " + name + " To The Master Playlist");
                     // Add the song to all active lists
                     bot.spotifyApi.addTracksToPlaylist(bot.seaID, [uri])
@@ -719,29 +749,33 @@ var bot = {
         return new Promise((resolve, reject) => {
             bot.getPlaylistUris(bot.themelistID)
                 .then(uris => {
-                    uris.forEach(uri => {
-                        bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, [{ uri: uri }])
+                    bot.playlistChunkBuilder(uris, true).forEach(chunk => {
+                        console.log("Removing Songs");
+                        bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, chunk)
                             .catch(() => {
-                                bot.tryUntilSuccess(bot.themelistID, [{ uri: uri }], false);
+                                bot.tryUntilSuccess(bot.themelistID, chunk, false);
                             });
-                    });
+                    })
+                })
+                .then(() => {
                     // Log activity
                     console.log("Theme Playlist Cleared");
                     bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Cleared");
-                    resolve();
+                    resolve(true);
                 });
         });
     },
     // Adds new songs to the dynamic playlist
-    createSpotifyPlaylist: async function (playlistID, songs) {
+    createSpotifyPlaylist: function (playlistID, songs) {
         // Actually make the playlist
         var uris = bot.songsToUris(songs);
         bot.clearDynamicList()
             .then(() => {
-                uris.forEach(uri => {
-                    bot.spotifyApi.addTracksToPlaylist(playlistID, [uri])
+                bot.playlistChunkBuilder(uris, false).forEach(chunk => {
+                    console.log("Adding Songs");
+                    bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
                         .catch(() => {
-                            bot.tryUntilSuccess(playlistID, uri, true);
+                            bot.tryUntilSuccess(playlistID, chunk, true);
                         });
                 });
                 // Log activity
@@ -750,17 +784,19 @@ var bot = {
             });
     },
     // If a song is failed to add, retry until success
-    tryUntilSuccess: function (playlistID, uri, add) {
+    tryUntilSuccess: function (playlistID, chunk, add) {
         if (add) {
-            bot.spotifyApi.addTracksToPlaylist(playlistID, [uri])
+            console.log("Adding Songs");
+            bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
                 .catch(() => {
-                    bot.tryUntilSuccess(playlistID, uri, true);
+                    bot.tryUntilSuccess(playlistID, chunk, true);
                 });
         }
         else {
-            bot.spotifyApi.removeTracksFromPlaylist(playlistID, uri)
+            console.log("Removing Songs");
+            bot.spotifyApi.removeTracksFromPlaylist(playlistID, chunk)
                 .catch(() => {
-                    bot.tryUntilSuccess(playlistID, uri, false);
+                    bot.tryUntilSuccess(playlistID, chunk, false);
                 });
         }
     },
@@ -828,8 +864,8 @@ for (const file of files) {
 
 // When bot loads
 client.once('ready', () => {
-    bot.startup();
     console.log("SpotBot v0.1.0");
+    bot.startup();
 });
 
 // For bot commands
@@ -924,7 +960,17 @@ app.get('/callback', (req, res) => {
             );
             res.send("Success! You can now close the window.");
 
-            bot.startupSpotify();
+            // Log activity
+            console.log("Bot Logged Into Spotify");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Bot Logged Into Spotify");
+
+            // Start loading stuff if spotify and discord are both loaded
+            if (bot.canLoad) {
+                bot.startupSpotify();
+            }
+            else {
+                bot.canLoad = true;
+            }
 
             setInterval(async () => {
                 const data = await bot.spotifyApi.refreshAccessToken();
