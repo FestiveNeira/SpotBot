@@ -405,7 +405,6 @@ var bot = {
         if (totTracks.length < goal) {
             // Log activity
             console.log("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
-            bot.client.channels.cache.get(bot.spotLogChat).send("Reading Chunk " + (1 + Math.floor(totTracks.length / 100)) + "/" + (Math.ceil(goal / 100)));
         }
 
         // Return a promise 
@@ -742,18 +741,31 @@ var bot = {
         }
         return selected;
     },
-    // Removes all songs from the dynamic playlist
-    clearDynamicList: function () {
+    // Adds new songs to the themed playlist
+    createSpotifyPlaylist: function (playlistID, songs) {
+        var uris = bot.songsToUris(songs);
+        bot.clearThemeList()
+            .then(async () => {
+                var promises = [];
+                bot.playlistChunkBuilder(uris, false).forEach(chunk => {
+                    promises.push(bot.addPlaylistSongs(chunk));
+                });
+                await Promise.all(promises);
+                // Log activity
+                console.log("Theme Playlist Songs Loaded");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
+            });
+    },
+    // Removes all songs from the themed playlist
+    clearThemeList: function () {
         return new Promise((resolve, reject) => {
             bot.getPlaylistUris(bot.themelistID)
-                .then(uris => {
+                .then(async uris => {
+                    var promises = [];
                     bot.playlistChunkBuilder(uris, true).forEach(chunk => {
-                        console.log("Removing Songs");
-                        bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, chunk)
-                            .catch(() => {
-                                bot.tryUntilSuccess(bot.themelistID, chunk, false);
-                            });
-                    })
+                        promises.push(bot.removePlaylistSongs(chunk));
+                    });
+                    await Promise.all(promises);
                 })
                 .then(() => {
                     // Log activity
@@ -763,40 +775,19 @@ var bot = {
                 });
         });
     },
-    // Adds new songs to the dynamic playlist
-    createSpotifyPlaylist: function (playlistID, songs) {
-        // Actually make the playlist
-        var uris = bot.songsToUris(songs);
-        bot.clearDynamicList()
-            .then(() => {
-                bot.playlistChunkBuilder(uris, false).forEach(chunk => {
-                    console.log("Adding Songs");
-                    bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
-                        .catch(() => {
-                            bot.tryUntilSuccess(playlistID, chunk, true);
-                        });
-                });
-                // Log activity
-                console.log("Theme Playlist Songs Loaded");
-                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
+    // Removes a chunk of 100 or fewer songs from the themed playlist
+    removePlaylistSongs: function (chunk) {
+        return bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, chunk)
+            .catch(() => {
+                return bot.removePlaylistSongs(chunk);
             });
     },
-    // If a song is failed to add, retry until success
-    tryUntilSuccess: function (playlistID, chunk, add) {
-        if (add) {
-            console.log("Adding Songs");
-            bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
-                .catch(() => {
-                    bot.tryUntilSuccess(playlistID, chunk, true);
-                });
-        }
-        else {
-            console.log("Removing Songs");
-            bot.spotifyApi.removeTracksFromPlaylist(playlistID, chunk)
-                .catch(() => {
-                    bot.tryUntilSuccess(playlistID, chunk, false);
-                });
-        }
+    // Adds a chunk of 100 or fewer songs from the themed playlist
+    addPlaylistSongs: function (chunk) {
+        return bot.spotifyApi.addTracksToPlaylist(bot.themelistID, chunk)
+            .catch(() => {
+                return bot.addPlaylistSongs(chunk);
+            });
     },
     // ------------------------------------------------------------ //
 
