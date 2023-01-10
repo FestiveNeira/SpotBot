@@ -749,7 +749,7 @@ var bot = {
                 .then(async () => {
                     var promises = [];
                     bot.playlistChunkBuilder(uris, false).forEach(chunk => {
-                        promises.push(bot.addPlaylistSongs(PlaylistID, chunk));
+                        promises.push(bot.addPlaylistSongs(playlistID, chunk));
                     });
                     await Promise.all(promises);
                     // Log activity
@@ -759,7 +759,7 @@ var bot = {
         }
         else {
             bot.playlistChunkBuilder(uris, false).forEach(chunk => {
-                bot.addPlaylistSongs(PlaylistID, chunk);
+                bot.addPlaylistSongs(playlistID, chunk);
             });
         }
     },
@@ -790,8 +790,8 @@ var bot = {
             });
     },
     // Adds a chunk of 100 or fewer songs from the themed playlist
-    addPlaylistSongs: function (PlaylistID, chunk) {
-        return bot.spotifyApi.addTracksToPlaylist(PlaylistID, chunk)
+    addPlaylistSongs: function (playlistID, chunk) {
+        return bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
             .catch(() => {
                 return bot.addPlaylistSongs(chunk);
             });
@@ -988,4 +988,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.1.0");
+console.log("SpotBot v1.1.1");
