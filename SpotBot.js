@@ -752,10 +752,13 @@ var bot = {
                         promises.push(bot.addPlaylistSongs(playlistID, chunk));
                     });
                     await Promise.all(promises);
+                })
+                .then(() => {
                     // Log activity
                     console.log("Theme Playlist Songs Loaded");
                     bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
-                });
+                })
+                .catch((error) => {console.log(error)});
         }
         else {
             bot.playlistChunkBuilder(uris, false).forEach(chunk => {
@@ -793,7 +796,7 @@ var bot = {
     addPlaylistSongs: function (playlistID, chunk) {
         return bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
             .catch(() => {
-                return bot.addPlaylistSongs(chunk);
+                return bot.addPlaylistSongs(playlistID, chunk);
             });
     },
     // ------------------------------------------------------------ //
@@ -988,4 +991,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.1.1");
+console.log("SpotBot v1.1.2");
