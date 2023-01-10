@@ -573,11 +573,11 @@ var bot = {
                 bot.spotifyApi.createPlaylist(name, { 'description': 'My auto generated playlist of my ' + bot.playsetting + ' ' + bot.playvalue + ' ' + bot.playlisttheme + ' songs. (prompt: setplaylist ' + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + ")", 'public': public })
                     .then((playlistInfo) => {
                         bot.createSpotifyPlaylist(playlistInfo.body.id, songs);
-                    })
 
-                // Log activity
-                console.log("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
-                bot.client.channels.cache.get(bot.spotLogChat).send("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
+                        // Log activity
+                        console.log("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
+                        bot.client.channels.cache.get(bot.spotLogChat).send("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
+                    });
             });
     },
     // Loads the theme playlist with the most recent settings
@@ -744,17 +744,24 @@ var bot = {
     // Adds new songs to the themed playlist
     createSpotifyPlaylist: function (playlistID, songs) {
         var uris = bot.songsToUris(songs);
-        bot.clearThemeList()
-            .then(async () => {
-                var promises = [];
-                bot.playlistChunkBuilder(uris, false).forEach(chunk => {
-                    promises.push(bot.addPlaylistSongs(chunk));
+        if (playlistID == bot.themelistID) {
+            bot.clearThemeList()
+                .then(async () => {
+                    var promises = [];
+                    bot.playlistChunkBuilder(uris, false).forEach(chunk => {
+                        promises.push(bot.addPlaylistSongs(PlaylistID, chunk));
+                    });
+                    await Promise.all(promises);
+                    // Log activity
+                    console.log("Theme Playlist Songs Loaded");
+                    bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
                 });
-                await Promise.all(promises);
-                // Log activity
-                console.log("Theme Playlist Songs Loaded");
-                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
+        }
+        else {
+            bot.playlistChunkBuilder(uris, false).forEach(chunk => {
+                bot.addPlaylistSongs(PlaylistID, chunk);
             });
+        }
     },
     // Removes all songs from the themed playlist
     clearThemeList: function () {
@@ -783,8 +790,8 @@ var bot = {
             });
     },
     // Adds a chunk of 100 or fewer songs from the themed playlist
-    addPlaylistSongs: function (chunk) {
-        return bot.spotifyApi.addTracksToPlaylist(bot.themelistID, chunk)
+    addPlaylistSongs: function (PlaylistID, chunk) {
+        return bot.spotifyApi.addTracksToPlaylist(PlaylistID, chunk)
             .catch(() => {
                 return bot.addPlaylistSongs(chunk);
             });
@@ -981,4 +988,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.0.1");
+console.log("SpotBot v1.1.0");
