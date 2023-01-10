@@ -351,21 +351,23 @@ var bot = {
     },
     // Deletes a theme
     delTheme: function (theme) {
-        // Remove a theme file
-        var themefile = './data/spotify/themes/' + theme + '.json';
-        if (fs.existsSync(themefile)) {
-            // Remove the theme from the themelist
-            bot.themeslist = bot.themeslist.filter(e => e !== theme);
-            // Delete's the file at themefile
-            fs.unlinkSync(themefile);
+        if (theme != "default") {
+            // Remove a theme file
+            var themefile = './data/spotify/themes/' + theme + '.json';
+            if (fs.existsSync(themefile)) {
+                // Remove the theme from the themelist
+                bot.themeslist = bot.themeslist.filter(e => e !== theme);
+                // Delete's the file at themefile
+                fs.unlinkSync(themefile);
 
-            // Log activity
-            console.log("Theme '" + theme + "' Deleted");
-            bot.client.channels.cache.get(bot.spotLogChat).send("Theme '" + theme + "' Deleted");
+                // Log activity
+                console.log("Theme '" + theme + "' Deleted");
+                bot.client.channels.cache.get(bot.spotLogChat).send("Theme '" + theme + "' Deleted");
 
-            // Save changes to settings
-            bot.saveSettings();
-            return true;
+                // Save changes to settings
+                bot.saveSettings();
+                return true;
+            }
         }
         return false;
     },
