@@ -981,4 +981,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.0.0");
+console.log("SpotBot v1.0.1");
