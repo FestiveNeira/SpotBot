@@ -49,7 +49,7 @@ var bot = {
     messageTypes: ['commands', 'generics', 'specials'],
     ariDM: '946077905199435836', // Unused
     ariID: '946077905199435836', // Unused
-    botID: '1043633807267467415', // Unused
+    botID: '1043633807267467415',
 
     // Discord Variables
     // Channel ID for rating songs
@@ -79,7 +79,7 @@ var bot = {
 
     // Loaded from themes.json
     // List of registered themes
-    themeslist: [],
+    themeslist: new Discord.Collection,
 
     // Loaded from settings.json
     // Current playlist theme
@@ -92,6 +92,8 @@ var bot = {
     ratingtheme: null,
     // Message corresponding to the song rating system
     ratingMessage: null,
+    // Message corresponding to the theme changing system
+    themeMessage: null,
 
     // Lists for songs and data
     // Array of song objects in master playlist, value always set to 0
@@ -124,11 +126,6 @@ var bot = {
                 bot.loadSettings();
                 // Load song maps and scores
                 bot.loadTheme(bot.ratingtheme);
-                // Reload playlist
-                bot.helpers('reloadplaylist', bot.playlisttheme + " " + bot.playsetting + " " + bot.playvalue);
-                if (bot.ratingMessage == null) {
-                    bot.helpers('sendballot', bot.spotChannel, bot);
-                }
 
                 // Log activity
                 console.log("Bot Loaded");
@@ -191,7 +188,9 @@ var bot = {
             ratmsg: bot.ratingMessage
         }
         var themes = {
-            themes: bot.themeslist
+            keys: Array.from(bot.themeslist.keys()),
+            themes: Array.from(bot.themeslist.values()),
+            thememsg: bot.themeMessage
         }
 
         var settingsfile = './data/spotify/settings.json';
@@ -221,8 +220,11 @@ var bot = {
         bot.playsetting = settings.playset;
         bot.playvalue = settings.playval;
         bot.ratingtheme = settings.ratetheme;
-        bot.themeslist = themes.themes;
+        for (var i = 0; i < themes.keys.length; i++) {
+            bot.themeslist.set(themes.keys[i], themes.themes[i]);
+        }
         bot.ratingMessage = settings.ratmsg;
+        bot.themeMessage = themes.thememsg;
 
         // Log activity
         console.log("Settings Loaded");
@@ -257,7 +259,7 @@ var bot = {
         bot.client.channels.cache.get(bot.spotLogChat).send("Theme Data Saved");
     },
     loadTheme: function (newtheme) {
-        if (bot.themeslist.indexOf(newtheme) != -1) {
+        if (this.themeExists(newtheme)) {
             // Reset the song collections
             bot.initSongMaps();
 
@@ -283,9 +285,9 @@ var bot = {
             // Update theme variable
             bot.ratingtheme = newtheme;
 
-            // Change ratingMessage content or send a rating message if one doesn't exist
-            if (bot.ratingMessage != null && bot.ratingMessage != "") {
-                bot.helpers('updateballot', bot.ratingMessage, bot);
+            // Change ratingMessage and themeMessage content or send new messages if one doesn't exist
+            if (bot.ratingMessage != null && bot.ratingMessage != "" && bot.themeMessage != null && bot.themeMessage != "") {
+                bot.helpers('updateballot', [bot.ratingMessage, bot.themeMessage], bot);
             }
             else {
                 bot.helpers('sendballot', bot.spotChannel, bot);
@@ -323,21 +325,30 @@ var bot = {
 
     // --------------- CREATING AND DELETING THEMES --------------- //
     // Creates a new theme and initializes all scores to 0
-    newTheme: function (newtheme) {
+    newTheme: function (newtheme, emote) {
         // Create a new theme file and initialize it to have all songs in the master list with values of 0
         var themefile = './data/spotify/themes/' + newtheme + '.json';
         if (!fs.existsSync(themefile)) {
             // Add the theme to the themelist
-            bot.themeslist.push(newtheme);
-
+            bot.themeslist.set(emote, newtheme);
             var playlistthemesongs = {
                 songs: Array.from(bot.songsObjectMasterList.values())
             }
-
             // Saves theme to a .json file
             fs.writeFileSync(themefile, JSON.stringify(playlistthemesongs), e => {
                 if (e) throw e;
             });
+            // Update and add a reaction to the theme changing message
+            if (bot.ratingMessage != null && bot.ratingMessage != "" && bot.themeMessage != null && bot.themeMessage != "") {
+                bot.helpers('updateballot', [bot.ratingMessage, bot.themeMessage], bot);
+            }
+            else {
+                bot.helpers('sendballot', bot.spotChannel, bot);
+            }
+            bot.client.channels.cache.get(bot.themeMessage.channelId).messages.fetch(bot.themeMessage.id)
+                .then(msg => {
+                    msg.react(emote);
+                });
 
             // Log activity
             console.log("New Theme '" + newtheme + "' Created");
@@ -355,18 +366,37 @@ var bot = {
             // Remove a theme file
             var themefile = './data/spotify/themes/' + theme + '.json';
             if (fs.existsSync(themefile)) {
-                // Remove the theme from the themelist
-                bot.themeslist = bot.themeslist.filter(e => e !== theme);
-                // Delete's the file at themefile
-                fs.unlinkSync(themefile);
+                // Get the key
+                var key = bot.getKeyFromVal(bot.themeslist, theme);
+                if (key != -1) {
+                    // Remove the theme from the themelist
+                    bot.themeslist.delete(key);
+                    // Delete's the file at themefile
+                    fs.unlinkSync(themefile);
+                    // Update and remove a reaction from theme changing message
+                    if (bot.ratingMessage != null && bot.ratingMessage != "" && bot.themeMessage != null && bot.themeMessage != "") {
+                        bot.helpers('updateballot', [bot.ratingMessage, bot.themeMessage], bot);
+                    }
+                    else {
+                        bot.helpers('sendballot', bot.spotChannel, bot);
+                    }
+                    bot.client.channels.cache.get(bot.themeMessage.channelId).messages.fetch(bot.themeMessage.id)
+                        .then(msg => {
+                            Array.from(msg.reactions.cache.values()).forEach(reaction => {
+                                if (reaction.emoji.name == key) {
+                                    reaction.remove();
+                                }
+                            });
+                        });
 
-                // Log activity
-                console.log("Theme '" + theme + "' Deleted");
-                bot.client.channels.cache.get(bot.spotLogChat).send("Theme '" + theme + "' Deleted");
+                    // Log activity
+                    console.log("Theme '" + theme + "' Deleted");
+                    bot.client.channels.cache.get(bot.spotLogChat).send("Theme '" + theme + "' Deleted");
 
-                // Save changes to settings
-                bot.saveSettings();
-                return true;
+                    // Save changes to settings
+                    bot.saveSettings();
+                    return true;
+                }
             }
         }
         return false;
@@ -490,10 +520,19 @@ var bot = {
     },
     themeExists: function (theme) {
         //checks to see if theme exists
-        if (bot.themeslist.indexOf(theme) != -1) {
+        if (Array.from(bot.themeslist.values()).indexOf(theme) != -1) {
             return true;
         }
         return false;
+    },
+    getKeyFromVal: function (map, val) {
+        var rkey = -1
+        map.forEach((value, key) => {
+            if (value == val) {
+                rkey = key;
+            }
+        });
+        return rkey;
     },
     // ------------------------------------------------------------ //
 
@@ -760,7 +799,7 @@ var bot = {
                     console.log("Theme Playlist Songs Loaded");
                     bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
                 })
-                .catch((error) => {console.log(error)});
+                .catch((error) => { console.log(error) });
         }
         else {
             bot.playlistChunkBuilder(uris, false).forEach(chunk => {
@@ -820,6 +859,7 @@ var bot = {
             }
         }
     }
+
     // ------------------------------------------------------------ //
 }
 
@@ -896,14 +936,23 @@ client.on('messageCreate', message => {
 
 // For song voting based on reactions
 client.on('messageReactionAdd', (reaction, user) => {
-    // If there is a ballot and this message is the ballot and the person who reacted is jasper
-    if (bot.ratingMessage != null && reaction.message.id === bot.ratingMessage.id) {
-        // Check that emoji is valid
-        if (["🤮", "👎", "👍", "🥰"].includes(reaction.emoji.name)) {
-            // Call helper for emoji
-            bot.helpers(reaction.emoji.name, { reaction: reaction, user: user });
-            reaction.users.remove(user);
+    if (user != bot.botID) {
+        // If there is a ballot and this message is the ballot
+        if (bot.ratingMessage != null && reaction.message.id === bot.ratingMessage.id) {
+            // Check that emoji is valid
+            if (["🤮", "👎", "👍", "🥰"].includes(reaction.emoji.name)) {
+                // Call helper for emoji
+                bot.helpers(reaction.emoji.name, { reaction: reaction, user: user });
+            }
         }
+        else if (bot.themeMessage != null && reaction.message.id === bot.themeMessage.id) {
+            // Check that emoji is valid
+            if (Array.from(bot.themeslist.keys()).includes(reaction.emoji.name)) {
+                bot.saveTheme();
+                bot.loadTheme(bot.themeslist.get(reaction.emoji.name));
+            }
+        }
+        reaction.users.remove(user);
     }
 });
 
@@ -993,4 +1042,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.1.2");
+console.log("SpotBot v1.2.1");
