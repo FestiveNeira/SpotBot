@@ -51,11 +51,10 @@ var bot = {
     ariID: '946077905199435836', // Unused
     botID: '1043633807267467415',
 
-    // Discord Variables
     // Channel ID for rating songs
-    spotChannel: '1060998261546160128',
+    spotChannel: '1061146423950856253',
     // Channel ID for changelog
-    spotLogChat: '946677297728069632',
+    spotLogChat: '1061146481945489518',
     // Message with song data for rating
     songMessage: null,
 
