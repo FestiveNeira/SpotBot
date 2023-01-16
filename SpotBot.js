@@ -253,9 +253,16 @@ var bot = {
             if (e) throw e;
         });
 
+        // Format theme name
+        var temp = bot.ratingtheme.split(" ");
+        for (var i = 0; i < temp.length; i++) {
+            temp[i] = temp[i][0].toUpperCase() + temp[i].substring(1);
+        }
+        var theme = temp.join(" ");
+
         // Log activity
-        console.log("Theme Data Saved");
-        bot.client.channels.cache.get(bot.spotLogChat).send("Theme Data Saved");
+        console.log("Theme Data For '" + theme + "' Saved");
+        bot.client.channels.cache.get(bot.spotLogChat).send("Theme Data For '" + theme + "' Saved");
     },
     loadTheme: function (newtheme) {
         if (this.themeExists(newtheme)) {
@@ -292,15 +299,21 @@ var bot = {
                 bot.helpers('sendballot', bot.spotChannel, bot);
             }
 
+            // Format theme name
+            var temp = bot.ratingtheme.split(" ");
+            for (var i = 0; i < temp.length; i++) {
+                temp[i] = temp[i][0].toUpperCase() + temp[i].substring(1);
+            }
+            var theme = temp.join(" ");
+
             // Log activity
-            console.log("Theme Loaded");
-            bot.client.channels.cache.get(bot.spotLogChat).send("Theme Loaded");
+            console.log("Theme Updated To '" + theme + "'");
+            bot.client.channels.cache.get(bot.spotLogChat).send("Theme Updated To '" + theme + "'");
 
             // Sync the data to the masterlist
             bot.syncToMaster();
             // Save changes to settings
             bot.saveSettings();
-            bot.saveTheme();
         }
         else {
             // Log activity
@@ -593,8 +606,15 @@ var bot = {
         bot.songsObjectRankMap.get(song.value).set(song.uri, song);
         bot.songsObjectRankMap.get(song.value - change).delete(song.uri);
 
+        // Format theme name
+        var temp = bot.ratingtheme.split(" ");
+        for (var i = 0; i < temp.length; i++) {
+            temp[i] = temp[i][0].toUpperCase() + temp[i].substring(1);
+        }
+        var theme = temp.join(" ");
+
         // Log activity
-        console.log("'" + song.name + "' Value Updated To " + song.value);
+        console.log("'" + song.name + "' Value Updated To " + song.value + " in '" + theme + "'");
         bot.client.channels.cache.get(bot.spotLogChat).send("'" + song.name + "' Value Updated To " + song.value);
     },
     // ------------------------------------------------------------ //
@@ -1041,4 +1061,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.2.1");
+console.log("SpotBot v1.2.2");
