@@ -1075,4 +1075,4 @@ app.listen(8888, () =>
 
 client.login(bot.tokenDiscord);
 
-console.log("SpotBot v1.2.2");
+console.log("SpotBot v1.2.3");
