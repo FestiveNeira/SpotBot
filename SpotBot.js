@@ -454,7 +454,7 @@ var bot = {
         // Return a promise 
         return new Promise((resolve, reject) => {
             // If we have read all tracks, resolve with the tracks
-            if (totTracks.length == goal) { // Fix this line
+            if (totTracks.length == goal) {
                 resolve(totTracks);
             }
             else {
@@ -467,7 +467,7 @@ var bot = {
                     // Error handling
                     .catch(function (error) {
                         if (error.statusCode === 500 || error.statusCode === 502 || error.statusCode === 429) {
-                            console.log('server error') // delete
+                            console.log('server error')
                             // If there's a server error try again
                             bot.getTracks(playlistID)
                                 // Resolve with results of successful attempt
@@ -546,6 +546,15 @@ var bot = {
         });
         return rkey;
     },
+    playlistContains: function (list, uri) {
+        var add = true;
+        list.forEach(item => {
+            if (item.track.uri == uri) {
+                add = false;
+            }
+        });
+        return add;
+    },
     // ------------------------------------------------------------ //
 
     // --------- EDITING RATING MAPS AND ADDING NEW SONGS --------- //
@@ -553,21 +562,26 @@ var bot = {
     checkMasterForUri: function (name, uri, add) {
         return new Promise((resolve, reject) => {
             // Can be used to auto add liked songs to master list INCOMPLETE
-            if (add) {
-                if (bot.songsObjectMasterList.get(uri) == null) {
-                    // Log activity
-                    console.log("Adding " + name + " To The Master Playlist");
-                    bot.client.channels.cache.get(bot.spotLogChat).send("Adding " + name + " To The Master Playlist");
-                    // Add the song to all active lists
-                    bot.spotifyApi.addTracksToPlaylist(bot.seaID, [uri])
-                        .then(() => {
-                            bot.addSong(name, uri);
-                            resolve(uri);
-                        });
-                }
-                else {
-                    resolve(uri);
-                }
+            if (add && bot.songsObjectMasterList.get(uri) == null) {
+                bot.spotifyApi.getPlaylist(bot.seaID)
+                .then((playlistInfo) => bot.spotifyApi.getPlaylistTracks(bot.seaID, { offset: playlistInfo.body.tracks.total - 50 }))
+                .then((lastTracks) => {
+                    if (bot.playlistContains(lastTracks.body.items, uri)) {
+                        // Log activity
+                        console.log("Adding " + name + " To The Master Playlist");
+                        bot.client.channels.cache.get(bot.spotLogChat).send("Adding " + name + " To The Master Playlist");
+                        // Add the song to all active lists
+                        bot.spotifyApi.addTracksToPlaylist(bot.seaID, [uri])
+                            .then(() => {
+                                bot.addSong(name, uri);
+                                resolve(uri);
+                            });
+                    }
+                    else {
+                        bot.addSong(name, uri);
+                        resolve(uri);
+                    }
+                });
             }
             else {
                 resolve(uri);
@@ -577,7 +591,7 @@ var bot = {
     // Adds a song to all maps
     addSong: function (name, uri, value = 0) {
         // Log activity
-        console.log("Adding '" + bot.songsObjectRatingMap.get(uri).name + "' To Lists");
+        console.log("Adding '" + name + "' To Lists");
         bot.client.channels.cache.get(bot.spotLogChat).send("Adding '" + name + "' To Lists");
 
         tempSong = new Song(name, uri, value);
