@@ -195,7 +195,7 @@ var bot = {
         var settingsfile = './data/spotify/settings.json';
         var themesfile = './data/spotify/themes.json';
 
-        // Saves settings to a .json files
+        // Saves settings to .json files
         fs.writeFileSync(settingsfile, JSON.stringify(settings), e => {
             if (e) throw e;
         });
@@ -462,7 +462,7 @@ var bot = {
                 bot.spotifyApi.getPlaylistTracks(playlistID, { offset: totTracks.length })
                     // Pass that next batch into the next step of readTracks (recurs until complete list is read)
                     .then((tracksInfo) => bot.readTracks(goal, playlistID, totTracks, tracksInfo.body.items))
-                    // Resolve the tracks annd pass them up the recursion chain
+                    // Resolve the tracks and pass them up the recursion chain
                     .then((result) => resolve(result))
                     // Error handling
                     .catch(function (error) {
