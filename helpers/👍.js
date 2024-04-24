@@ -35,7 +35,7 @@ module.exports = {
             .catch((error) => {
                 if (error === "No song playing") {
                     //no song is playing right now
-                    console.log("No song is currently playing.")
+                    console.log("No song is currently playing.");
                 }
             })
     }
