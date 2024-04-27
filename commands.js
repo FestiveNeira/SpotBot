@@ -1,6 +1,7 @@
 const {
     updatePlaylist,
-    clonePlaylist
+    clonePlaylist,
+    checkMasterForUri
 } = require('./spotify.js');
 const {
     like,
@@ -72,7 +73,7 @@ function removetheme(message, args, bot) {
         var themefile = './data/spotify/themes/' + theme + '.json';
         if (fs.existsSync(themefile)) {
             // Get the key
-            var key = bot.getKeyFromVal(bot.themeslist, theme);
+            var key = getKeyFromVal(bot.themeslist, theme);
             if (key != -1) {
                 // Remove the theme from the themelist
                 bot.themeslist.delete(key);
@@ -209,7 +210,7 @@ function setsongscore(message, args, bot) {
                 var uri = data.body.item.uri;
 
                 //check for the uri in the masterlist
-                return bot.checkMasterForUri(name, uri, plus);
+                return checkMasterForUri(name, uri, plus);
             })
             .then((uri) => {
                 songval = bot.urisToSongs([uri])[0].value;
@@ -232,6 +233,17 @@ function stop(message, args, bot) {
     console.log("Bot Stopped");
     bot.client.channels.cache.get(bot.spotLogChat).send("Bot Stopped");
     process.exit(0);
+}
+
+// Helpers
+function getKeyFromVal(map, val) {
+    var rkey = -1
+    map.forEach((value, key) => {
+        if (value == val) {
+            rkey = key;
+        }
+    });
+    return rkey;
 }
 
 module.exports = {

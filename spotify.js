@@ -1,9 +1,84 @@
+// Spotify API setup
+const express = require('express');
+const app = express();
+
+const { clientId, clientSecret } = require('./data/config.json');
+
+const SpotifyWebApi = require('spotify-web-api-node');
+
+const spotifyApi = new SpotifyWebApi({
+    clientId: clientId,
+    clientSecret: clientSecret,
+    redirectUri: 'http://localhost:8888/callback'
+})
+
 // ---------------------- CONNECT TO BOT ---------------------- //
 
 const fs = require('fs');
 var bot;
 function connectBot(b) {
     bot = b;
+}
+
+class Song {
+    constructor(name, uri, value) {
+        this.name = name;
+        this.uri = uri;
+        this.value = value;
+    }
+}
+
+// Load spotify and song data
+function startupSpotify() {
+    // Load master playlist and updates
+    loadMaster()
+        .then(() => {
+            // Load settings (playlist theme, playlist setting (int or %), rating theme)
+            bot.loadSettings();
+            // Load song maps and scores
+            bot.loadTheme(bot.ratingtheme);
+
+            // Log activity
+            bot.sendMessage("Bot Loaded");
+        });
+}
+// Handles reading in the master song list
+function loadMaster() {
+    return new Promise((resolve, reject) => {
+        // Log activity
+        bot.sendMessage("Reading Master Playlist");
+        // Load masterlist from spotify
+        getTracks(bot.seaID)
+            .then(tracks => {
+                tracks.forEach(item => {
+                    // Only support non-local songs
+                    if (item.track.uri.indexOf("spotify:local") == -1) {
+                        let newsong = new Song(item.track.name, item.track.uri, 0);
+                        bot.songsObjectMasterList.set(newsong.uri, newsong);
+                    }
+                    else {
+                        // Log activity
+                        bot.sendMessage("'" + item.track.name + "' Is Local And Unsupported");
+                    }
+                });
+
+                // Log activity
+                bot.sendMessage("Master Playlist Loaded");
+                resolve();
+            });
+    })
+        .catch(function (error) {
+            if (error.statusCode === 500 || error.statusCode === 502) {
+                // If there's a server error try again
+                bot.loadMaster()
+                    .then(() => resolve())
+            }
+            else {
+                // Log activity
+                bot.sendMessage("Something Went Wrong While Reading Master List");
+                console.log(error);
+            }
+        });
 }
 
 // ------------ GETTING AND CONVERTING INFORMATION ------------ //
@@ -13,7 +88,7 @@ function getTracks(playlistID) {
     // Return a promise
     return new Promise((resolve, reject) => {
         // Get playlist data from API
-        bot.spotifyApi.getPlaylist(playlistID)
+        spotifyApi.getPlaylist(playlistID)
             // Send the length of the playlist into readTracks so that it knows how much to scan
             .then((playlistInfo) => readTracks(playlistInfo.body.tracks.total, playlistID))
             // Resolve the tracks back out to the promise
@@ -51,7 +126,7 @@ function readTracks(goal, playlistID, totTracks = [], newTracks = []) {
         }
         else {
             // Get the next batch of tracks
-            bot.spotifyApi.getPlaylistTracks(playlistID, { offset: totTracks.length })
+            spotifyApi.getPlaylistTracks(playlistID, { offset: totTracks.length })
                 // Pass that next batch into the next step of readTracks (recurs until complete list is read)
                 .then((tracksInfo) => readTracks(goal, playlistID, totTracks, tracksInfo.body.items))
                 // Resolve the tracks and pass them up the recursion chain
@@ -72,6 +147,47 @@ function readTracks(goal, playlistID, totTracks = [], newTracks = []) {
                 });
         }
     })
+}
+
+
+// Checks that a song exists in the masterlist and adds it if it doesn't and it's liked
+function checkMasterForUri(name, uri, add) {
+    return new Promise((resolve, reject) => {
+        // Can be used to auto add liked songs to master list INCOMPLETE
+        if (add && bot.songsObjectMasterList.get(uri) == null) {
+            spotifyApi.getPlaylist(bot.seaID)
+                .then((playlistInfo) => spotifyApi.getPlaylistTracks(bot.seaID, { offset: playlistInfo.body.tracks.total - 50 }))
+                .then((lastTracks) => {
+                    if (playlistContains(lastTracks.body.items, uri)) {
+                        // Log activity
+                        bot.sendMessage("Adding " + name + " To The Master Playlist");
+                        // Add the song to all active lists
+                        spotifyApi.addTracksToPlaylist(bot.seaID, [uri])
+                            .then(() => {
+                                bot.addSong(name, uri);
+                                resolve(uri);
+                            });
+                    }
+                    else {
+                        bot.addSong(name, uri);
+                        resolve(uri);
+                    }
+                });
+        }
+        else {
+            resolve(uri);
+        }
+    })
+}
+
+function playlistContains(list, uri) {
+    var add = true;
+    list.forEach(item => {
+        if (item.track.uri == uri) {
+            add = false;
+        }
+    });
+    return add;
 }
 
 // ----------- MAKING CHANGES TO THE THEME PLAYLIST ----------- //
@@ -106,8 +222,7 @@ function updatePlaylist(theme, type, value) {
                     // Do not continue if invalid args
                     run = false;
                     // Log activity
-                    console.log("Invalid Value Type");
-                    bot.client.channels.cache.get(bot.spotLogChat).send("Invalid Value Type");
+                    bot.sendMessage("Invalid Value Type");
                 }
                 // Check that val is in range
                 if (val < 0 || val > bot.songsObjectMasterList.size) {
@@ -125,26 +240,22 @@ function updatePlaylist(theme, type, value) {
             bot.saveSettings();
         }
         else {
-            console.log("Theme Does Not Exist");
-            bot.client.channels.cache.get(bot.spotLogChat).send("Theme Does Not Exist");
+            bot.sendMessage("Theme Does Not Exist");
         }
         if (run) {
             // Log activity
-            console.log("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
-            bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
+            bot.sendMessage("Playlist Updated To Settings: '" + theme + ' ' + type + ' ' + value + "'");
             return true;
         }
         else {
             // Log activity
-            console.log("Playlist Failed To Update");
-            bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Failed To Update");
+            bot.sendMessage("Playlist Failed To Update");
             return false;
         }
     }
     catch {
         // Log activity
-        console.log("Playlist Failed To Update");
-        bot.client.channels.cache.get(bot.spotLogChat).send("Playlist Failed To Update");
+        bot.sendMessage("Playlist Failed To Update");
         return false;
     }
 }
@@ -153,19 +264,18 @@ function updatePlaylist(theme, type, value) {
 function clonePlaylist(name, visible, bot) {
     // Clones current playlist into a new playlist called name
     var songs;
-    bot.getPlaylistUris(bot.themelistID)
+    getPlaylistUris(bot.themelistID)
         .then(uris => {
-            return bot.urisToSongs(uris);
+            return urisToSongs(uris);
         })
         .then(songobjects => {
             songs = songobjects;
-            bot.spotifyApi.createPlaylist(name, { 'description': 'My auto generated playlist of my ' + bot.playsetting + ' ' + bot.playvalue + ' ' + bot.playlisttheme + ' songs. (prompt: setplaylist ' + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + ")", 'public': visible })
+            spotifyApi.createPlaylist(name, { 'description': 'My auto generated playlist of my ' + bot.playsetting + ' ' + bot.playvalue + ' ' + bot.playlisttheme + ' songs. (prompt: setplaylist ' + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + ")", 'public': visible })
                 .then((playlistInfo) => {
                     createSpotifyPlaylist(playlistInfo.body.id, songs);
 
                     // Log activity
-                    console.log("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
-                    bot.client.channels.cache.get(bot.spotLogChat).send("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
+                    bot.sendMessage("Playlist With Settings: '" + bot.playlisttheme + ' ' + bot.playsetting + ' ' + bot.playvalue + "' Saved");
                 });
         });
 }
@@ -232,8 +342,7 @@ function constructPlaylistStandard(map, type, val) {
     }
     else {
         // Log activity
-        console.log("Invalid Creation Type.");
-        bot.client.channels.cache.get(bot.spotLogChat).send("Invalid Creation Type");
+        bot.sendMessage("Invalid Creation Type");
     }
     createSpotifyPlaylist(bot.themelistID, playlistsongs);
 }
@@ -273,7 +382,7 @@ function playlistChunkBuilder(uris, remove) {
 
 // Adds new songs to the themed playlist
 function createSpotifyPlaylist(playlistID, songs) {
-    var uris = bot.songsToUris(songs);
+    var uris = songsToUris(songs);
     if (playlistID == bot.themelistID) {
         clearThemeList()
             .then(async () => {
@@ -285,8 +394,7 @@ function createSpotifyPlaylist(playlistID, songs) {
             })
             .then(() => {
                 // Log activity
-                console.log("Theme Playlist Songs Loaded");
-                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Songs Loaded");
+                bot.sendMessage("Theme Playlist Songs Loaded");
             })
             .catch((error) => { console.log(error) });
     }
@@ -302,7 +410,7 @@ function createSpotifyPlaylist(playlistID, songs) {
 // Removes all songs from the themed playlist
 function clearThemeList() {
     return new Promise((resolve, reject) => {
-        bot.getPlaylistUris(bot.themelistID)
+        getPlaylistUris(bot.themelistID)
             .then(async uris => {
                 var promises = [];
                 playlistChunkBuilder(uris, true).forEach(chunk => {
@@ -312,8 +420,7 @@ function clearThemeList() {
             })
             .then(() => {
                 // Log activity
-                console.log("Theme Playlist Cleared");
-                bot.client.channels.cache.get(bot.spotLogChat).send("Theme Playlist Cleared");
+                bot.sendMessage("Theme Playlist Cleared");
                 resolve(true);
             });
     });
@@ -321,7 +428,7 @@ function clearThemeList() {
 
 // Removes a chunk of 100 or fewer songs from the themed playlist
 function removePlaylistSongs(chunk) {
-    return bot.spotifyApi.removeTracksFromPlaylist(bot.themelistID, chunk)
+    return spotifyApi.removeTracksFromPlaylist(bot.themelistID, chunk)
         .catch(() => {
             return removePlaylistSongs(chunk);
         });
@@ -329,15 +436,132 @@ function removePlaylistSongs(chunk) {
 
 // Adds a chunk of 100 or fewer songs from the themed playlist
 function addPlaylistSongs(playlistID, chunk) {
-    return bot.spotifyApi.addTracksToPlaylist(playlistID, chunk)
+    return spotifyApi.addTracksToPlaylist(playlistID, chunk)
         .catch(() => {
             return addPlaylistSongs(playlistID, chunk);
         });
 }
 
+// Data conversion helpers
+function getPlaylistUris(playid) {
+    // Get a list of uris from given playlist
+    return new Promise((resolve, reject) => {
+        // Create an empty list to return
+        var uris = [];
+        getTracks(playid)
+            .then((tracks) => {
+                tracks.forEach(item => {
+                    // Only support non-local songs
+                    if (item.track.uri.indexOf("spotify:local") == -1) {
+                        uris.push(item.track.uri);
+                    }
+                });
+                // Resolve the uri list out to be used
+                resolve(uris);
+            });
+    })
+        .catch(() => reject());
+}
+// Converts a list of songs to a list of uris
+function songsToUris(songs) {
+    var uris = [];
+    for (var i = 0; i < songs.length; i++) {
+        uris.push(songs[i].uri);
+    }
+    return uris;
+}
+// Converts a list of uris to a list of rated songs
+function urisToSongs(uris) {
+    var songs = [];
+    for (var i = 0; i < uris.length; i++) {
+        songs.push(bot.songsObjectRatingMap.get(uris[i]));
+    }
+    return songs;
+}
+
+// Spotify login things
+const scopes = [
+    'ugc-image-upload',
+    'user-read-playback-state',
+    'user-modify-playback-state',
+    'user-read-currently-playing',
+    'streaming',
+    'app-remote-control',
+    'user-read-email',
+    'user-read-private',
+    'playlist-read-collaborative',
+    'playlist-modify-public',
+    'playlist-read-private',
+    'playlist-modify-private',
+    'user-library-modify',
+    'user-library-read',
+    'user-top-read',
+    'user-read-playback-position',
+    'user-read-recently-played',
+    'user-follow-read',
+    'user-follow-modify'
+];
+
+app.get('/login', (req, res) => {
+    res.redirect(spotifyApi.createAuthorizeURL(scopes));
+});
+
+app.get('/callback', (req, res) => {
+    const error = req.query.error;
+    const code = req.query.code;
+    const state = req.query.state;
+
+    if (error) {
+        console.error('Callback Error:', error);
+        res.send(`Callback Error: ${error}`);
+        return;
+    }
+
+    spotifyApi
+        .authorizationCodeGrant(code)
+        .then(data => {
+            const access_token = data.body['access_token'];
+            const refresh_token = data.body['refresh_token'];
+            const expires_in = data.body['expires_in'];
+
+            spotifyApi.setAccessToken(access_token);
+            spotifyApi.setRefreshToken(refresh_token);
+
+            console.log(
+                `Successfully retrieved access token. Expires in ${expires_in} s.`
+            );
+            res.send("Success! You can now close the window.");
+
+            // Log activity
+            console.log("Bot Logged Into Spotify");
+
+            startupSpotify();
+
+            setInterval(async () => {
+                const data = await spotifyApi.refreshAccessToken();
+                const access_token = data.body['access_token'];
+
+                console.log("The access token has been refreshed!");
+                spotifyApi.setAccessToken(access_token);
+            }, expires_in / 2 * 1000);
+        })
+        .catch(error => {
+            console.error("Error getting Tokens:", error);
+            res.send(`Error getting Tokens: ${error}`);
+        });
+});
+
+app.listen(8888, () =>
+    console.log(
+        "HTTP Server up. Now go to http://localhost:8888/login in your browser."
+    )
+);
+
 module.exports = {
+    startupSpotify,
     connectBot,
     getTracks,
+    checkMasterForUri,
     updatePlaylist,
     clonePlaylist
 };
